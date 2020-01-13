@@ -4,7 +4,7 @@ sequence_files:
     name: /mnt/storage2/temp_workdir/Undetermined_S0_L003_R1_001.fastq.gz
     base_definition:
       - cDNA(23-150)
-      - UMI(12-22)
+      - UMI(12-19)
     find_pattern: ATTGCGCAATG
   file2:
     name: /mnt/storage2/temp_workdir/Undetermined_S0_L003_R2_001.fastq.gz
