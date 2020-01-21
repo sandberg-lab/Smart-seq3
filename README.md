@@ -10,9 +10,12 @@ We show how fastq files are efficiently processed to BAM files in a manner that 
 ## 2) Scripts to reconstruct RNA molecules based on the zUMI prepared BAM files.
 Using python script stitcher.py we in silico reconstruct RNA molecules based on the read pair alignments in the zUMI generated BAM files. Note that for RNA reconstruction, paired-end sequencing data is required. This step results in a new BAM file where each entry is a reconstructed molecule.
 
-## 3) Scripts to assign reconstructed RNA molecules to transcript isoforms.
+## 4) Scripts to assign reconstructed RNA molecules to allelic origins.
+Stand-alone scripts that assigns ...
+
+## 4) Scripts to assign reconstructed RNA molecules to transcript isoforms.
 Using a couple of python scripts, we assign each RNA molecule to a set of compatible isoforms (including unique assignments). The resulting assignments are reported in tab-delimited text files.
 
-## 4) Notebooks.
+## 5) Notebooks.
 Here we post notebooks that show the analysis workflows for selected analyses from Hagemann-Jensen et al. as R or Python Jupyter notebooks.
 
