@@ -20,13 +20,13 @@ load_reads <- function(is_UMI, cellBCs, filename, return_map, read_layout){
     cols_to_read <- c(2,4,5,6,7)
     colname_vec <- c("pos","cigar","seq","BC","GeneID")
   }
-  
+
   reads <- fread(file = filename,
                  sep = "\t",
                  header = F, fill = T,
                  select = cols_to_read, #read only necessary cls
                  col.names = colname_vec)[ BC %in% cellBCs ][ ! GeneID == "" ] #directly drop unnecessary rows
-  
+
   if(return_map == FALSE){
     system(paste("pigz -p ",ncores,filename))
   }
@@ -48,13 +48,13 @@ variant_parsing <- function(reads, variant_positions, is_UMI){
   ranges_on_ref <- unlist(ranges_on_ref, use.names=FALSE)
   ranges_on_query <- unlist(ranges_on_query, use.names=FALSE)
   query2ref_shift <- start(ranges_on_ref) - start(ranges_on_query)
-  
+
   var_pos <- variant_positions
   hits <- findOverlaps(var_pos, ranges_on_ref)
   hits_at_in_x <- var_pos[queryHits(hits)] - query2ref_shift[subjectHits(hits)]
   hits_group <- range_group[subjectHits(hits)]
   fetched_bases <- subseq(reads[hits_group,]$seq, start=hits_at_in_x, width=1L)
-  
+
   #now add everything together in the output data.table
   out_vars <- data.table(
     obs_base = fetched_bases,
@@ -64,10 +64,10 @@ variant_parsing <- function(reads, variant_positions, is_UMI){
   if( is_UMI ){
     out_vars[, UB := reads[hits_group]$UB ]
   }
-  
+
   out_vars <- out_vars[obs_base %in% c("A","C","G","T") ]
   setnames(out_vars,"pos","POS")
-  
+
   return(out_vars)
 }
 
@@ -76,21 +76,21 @@ calc_coverage_new_return_map <- function(vcf_chunk, out, cellBCs, type, read_lay
   is_UMI <- any(grepl("UMIs", type))
   print(paste("Starting to read data for chr ", chr))
   Sys.time()
-  
+
   reads <- load_reads(is_UMI = is_UMI, cellBCs = cellBCs, filename = paste0(out,chr,".var_overlap.readsout"), return_map = TRUE, read_layout = read_layout)
-  
+
   print("Reading complete, processing reads & cigar values...")
   Sys.time()
-  
+
   out_vars <- variant_parsing(reads, variant_positions = as.integer(vcf_chunk$POS), is_UMI = is_UMI)
-  
+
   #crunch the numbers :-)
   out_vars <- merge(out_vars,vcf_chunk,by = "POS" )
-  
+
   out_vars[          , basecall := "other"][
       obs_base == REF, basecall := "c57"][
       obs_base == ALT, basecall := "cast"]
-  
+
   out_reads <- out_vars[, .(readcall = read_decision(basecall)), by = c("BC","GeneID","readID")]
   if( is_UMI ){
     out_UMIs <- out_vars[! UB == "" , .(UMIcall = read_decision(basecall)), by = c("BC","GeneID","UB")]
@@ -106,61 +106,61 @@ calc_coverage_new <- function(vcf_chunk, out, cellBCs, type, read_layout){
   print(paste("Starting to read data for chr ", chr))
   Sys.time()
   reads <- load_reads(is_UMI = is_UMI, cellBCs = cellBCs, filename = paste0(out,chr,".var_overlap.readsout"), return_map = FALSE, read_layout = read_layout)
-  
+
   print("Reading complete, processing reads & cigar values...")
   Sys.time()
-  
+
   out_vars <- variant_parsing(reads, variant_positions = as.integer(vcf_chunk$POS), is_UMI = is_UMI)
-  
+
   #crunch the numbers :-)
   out_vars <- merge(out_vars,vcf_chunk,by = "POS" )
-  
+
   out_vars[              , basecall := "other"][
           obs_base == REF, basecall := "c57"][
           obs_base == ALT, basecall := "cast"]
-  
+
   out_reads <- out_vars[, .(readcall = read_decision(basecall)), by = c("BC","GeneID","readID")]
   if( is_UMI ){
     out_UMIs <- out_vars[! UB == "" , .(UMIcall = read_decision(basecall)), by = c("BC","GeneID","UB")]
   }
   rm(out_vars)
-  
+
   out_dat <- out_reads[
     , .N, by=.(BC,GeneID,readcall)][
       , chr := chr]
-  
+
   rm(out_reads)
-  
+
   out_dat <- dcast(out_dat, formula = chr+BC+GeneID ~ readcall, value.var = "N", fill = 0)
   out_dat[, total := c57+cast+other]
-  
+
   out_dat <- out_dat[other/total < 0.33]
-  
+
   out_dat[, CAST_fraction := cast/(cast+c57), by = c("BC","GeneID")]
-  
+
   print("Done!")
-  
+
   if( is_UMI ){
     out_dat_UMIs <- out_UMIs[
       , .N, by=c("BC","GeneID","UMIcall")][
         , chr := chr]
-    
+
     rm(out_UMIs)
-    
+
     out_dat_UMIs <- dcast(out_dat_UMIs, formula = chr+BC+GeneID ~ UMIcall, value.var = "N", fill = 0)
     out_dat_UMIs[, total := c57+cast+other]
-    
+
     out_dat_UMIs <- out_dat_UMIs[other/total < 0.33]
-    
+
     out_dat_UMIs[, CAST_fraction := cast/(cast+c57), by = c("BC","GeneID")]
-    
+
     out_list <- list(reads = out_dat,
                      UMIs = out_dat_UMIs)
     return(out_list)
   }else{
     return(out_dat)
   }
-  
+
 }
 
 makeWide <- function(allele_dat, metric = c("cast","c57","CAST_fraction")){
@@ -276,17 +276,17 @@ outpath <- paste0(opt$out_dir,"/zUMIs_output/allelic/")
   if(!dir.exists(outpath)){
     try(system(paste("mkdir",outpath)))
   }
-  
+
   outpath <- paste0(outpath,opt$project,".")
   ncores <- opt$num_threads
   cellBCs <- paste0(opt$out_dir,"/zUMIs_output/",opt$project,"kept_barcodes.txt")
-  
+
   setwd(opt$out_dir)
   setDTthreads(ncores)
-  
-  
+
+
   UMIdata_flag <- check_nonUMIcollapse(opt$sequence_files)
-  
+
 
 # read stuff --------------------------------------------------------------
 
@@ -340,14 +340,14 @@ if( file.exists( paste0(outpath,chroms_todo[[1]],".var_overlap.readsout") ) | fi
   samtoolsexc <- opt$samtools_exec
   if(UMIdata_flag == "UMI"){
     if(hammingflag){
-      samtools_cmd1 <- "view -@2 -x BQ -x UQ -x ES -x IS -x EN -x IN -x GI -x BX -x UX -x NH -x AS -x nM -x HI -x IH -x NM -x uT -x MD -x jM -x jI -x XN -x XS -x vA -x vG -x vW"
+      samtools_cmd1 <- "view -@2 -x QB -x QU -x ES -x IS -x EN -x IN -x GI -x BX -x UX -x NH -x AS -x nM -x HI -x IH -x NM -x uT -x MD -x jM -x jI -x XN -x XS -x vA -x vG -x vW"
       samtools_cmd2 <- paste0(" | cut -f3,4,5,6,10,12,13,14 | grep '",genetag,"' | sed 's/",genetag,":Z://' | sed 's/UB:Z://' | sed 's/",BCtag,":Z://' | awk 'BEGIN{IFS=\"\t\";OFS=\"\t\";}{print $1,$2,$3,$4,$5,$6,$8,$7;}' | awk '{if($3 == \"255\"){print > \"",outpath,"\"$1\".var_overlap.readsout\"}}'")
     }else{
-      samtools_cmd1 <- "view -@2 -x BQ -x UQ -x ES -x IS -x EN -x IN -x GI -x BX -x UX -x NH -x AS -x nM -x HI -x IH -x NM -x uT -x MD -x jM -x jI -x XN -x XS -x vA -x vG -x vW"
-      samtools_cmd2 <- paste0(" | cut -f3,4,5,6,10,12,13,14 | grep '",genetag,"' | sed 's/",genetag,":Z://' | sed 's/",BCtag,":Z://' | awk '{if($3 == \"255\"){print > \"",outpath,"\"$1\".var_overlap.readsout\"}}'")
+      samtools_cmd1 <- "view -@2 -x QB -x QU -x ES -x IS -x EN -x IN -x GI -x BX -x UX -x NH -x AS -x nM -x HI -x IH -x NM -x uT -x MD -x jM -x jI -x XN -x XS -x vA -x vG -x vW"
+      samtools_cmd2 <- paste0(" | cut -f3,4,5,6,10,12,13,14 | grep '",genetag,"' | sed 's/",genetag,":Z://' | sed 's/UB:Z://' | sed 's/",BCtag,":Z://' | awk '{if($3 == \"255\"){print > \"",outpath,"\"$1\".var_overlap.readsout\"}}'")
     }
   }else{
-    samtools_cmd1 <- "view -@2 -x BQ -x UQ -x ES -x IS -x EN -x IN -x GI -x BX -x UX -x NH -x AS -x nM -x HI -x IH -x NM -x uT -x MD -x jM -x jI -x XN -x XS -x vA -x vG -x vW -x UB"
+    samtools_cmd1 <- "view -@2 -x QB -x QU -x ES -x IS -x EN -x IN -x GI -x BX -x UX -x NH -x AS -x nM -x HI -x IH -x NM -x uT -x MD -x jM -x jI -x XN -x XS -x vA -x vG -x vW -x UB"
     samtools_cmd2 <- paste0(" | cut -f3,4,5,6,10,12,13 | grep '",genetag,"' | sed 's/",genetag,":Z://' | sed 's/",BCtag,":Z://' | awk '{if($3 == \"255\"){print > \"",outpath,"\"$1\".var_overlap.readsout\"}}'")
   }
   samtools_cmd <- paste(samtoolsexc,samtools_cmd1,path_bam,samtools_cmd2)
@@ -370,11 +370,11 @@ if(UMIdata_flag == "UMI"){
     fwrite(map_out, file = paste0(outpath,"molecule_assignments.txt" ), sep= "\t", quote = F)
     print("Continuing with allelic expression tables...")
   }
-  
+
   out_list <- lapply(vcf_list, function(x) calc_coverage_new(vcf_chunk = x, out = outpath, cellBCs = cellBCs, type = c("reads","UMIs"), read_layout = opt$read_layout ))
   read_list <- lapply(out_list, function(x) x$reads)
   UMI_list <- lapply(out_list, function(x) x$UMIs)
-  
+
   out_reads <- rbindlist(read_list)
   out_UMIs <- rbindlist(UMI_list)
 }else{
@@ -405,11 +405,11 @@ if(UMIdata_flag == "UMI"){
   CAST_UMIs <- makeWide(allele_dat = out_UMIs, metric = "cast")
   BL6_UMIs <- makeWide(allele_dat = out_UMIs, metric = "c57")
   fract_CAST_UMIs <- makeWide(allele_dat = out_UMIs, metric = "CAST_fraction")
-  
+
   fwrite(CAST_UMIs, file = paste0(outpath,"CAST_direct_UMIs.txt" ), sep= "\t", quote = F)
   fwrite(BL6_UMIs, file = paste0(outpath,"BL6_direct_UMIs.txt" ), sep= "\t", quote = F)
   fwrite(fract_CAST_UMIs, file = paste0(outpath,"fract_CAST_direct_UMIs.txt" ), sep= "\t",na = "NA", quote = F)
-  
+
   #also convert total UMI counts into fractional allele counts with read count derived allele fractions
   dge <- paste(opt$out_dir,"/zUMIs_output/expression/",opt$project,".dgecounts.rds",sep="")
   UMIs <- makeUMIs(dge_path = dge, fract_CAST)
