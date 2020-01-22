@@ -8,7 +8,7 @@ suppressPackageStartupMessages(library(optparse))
 suppressPackageStartupMessages(library(yaml))
 
 Sys.time()
-
+print("allele level expression v1.1")
 
 # number crunching function -----------------------------------------------
 
@@ -307,6 +307,27 @@ chroms_todo <- unique(vcf$CHROM)
 chroms_todo <- chroms_todo[! chroms_todo %in% c("Y","chrY")]
 
 
+# detect if zUMIs >= 2.6.0 is used ----------------------------------------
+if( file.exists(paste0(opt$out_dir,"/",opt$project,".filtered.Aligned.GeneTagged.sorted.bam")) || file.exists(paste0(opt$out_dir,"/",opt$project,".filtered.Aligned.GeneTagged.UBcorrected.sorted.bam")) ){
+  genetag <- "GE"
+  if( file.exists(paste0(opt$out_dir,"/",opt$project,".filtered.Aligned.GeneTagged.UBcorrected.sorted.bam")) ){
+    hammingflag <- TRUE
+    path_bam <- paste0(opt$out_dir,"/",opt$project,".filtered.Aligned.GeneTagged.UBcorrected.sorted.bam")
+  }else{
+    hammingflag <- FALSE
+    path_bam <- paste0(opt$out_dir,"/",opt$project,".filtered.Aligned.GeneTagged.sorted.bam")
+  }
+}else{
+  genetag <- "XT"
+  if( file.exists( paste0(opt$out_dir,"/",opt$project,".filtered.tagged.Aligned.out.bam.ex.featureCounts.UBfix.bam")) ){
+    hammingflag <- TRUE
+    path_bam <- file.exists( paste0(opt$out_dir,"/",opt$project,".filtered.tagged.Aligned.out.bam.ex.featureCounts.UBfix.bam"))
+  }else{
+    hammingflag <- FALSE
+    path_bam <- paste0(opt$out_dir,"/",opt$project,".filtered.tagged.Aligned.out.bam.ex.featureCounts.bam")
+  }
+}
+
 # extract unique maps per chromosome  -------------------------------------
 if( file.exists( paste0(outpath,chroms_todo[[1]],".var_overlap.readsout") ) | file.exists( paste0(outpath,chroms_todo[[1]],".var_overlap.readsout.gz") ) ){
   zipped_files <- list.files(path=paste0(opt$out_dir,"/zUMIs_output/allelic/"), pattern=".var_overlap.readsout.gz", full.names=T)
@@ -318,19 +339,16 @@ if( file.exists( paste0(outpath,chroms_todo[[1]],".var_overlap.readsout") ) | fi
   print("Extracting reads...")
   samtoolsexc <- opt$samtools_exec
   if(UMIdata_flag == "UMI"){
-    if(file.exists( paste0(opt$out_dir,"/",opt$project,".filtered.tagged.Aligned.out.bam.ex.featureCounts.UBfix.bam") )){
-      path_bam <- paste0(opt$out_dir,"/",opt$project,".filtered.tagged.Aligned.out.bam.ex.featureCounts.UBfix.bam")
-      samtools_cmd1 <- "view -@2 -x BX -x UX -x NH -x AS -x nM -x HI -x IH -x NM -x uT -x MD -x jM -x jI -x XN -x XS -x vA -x vG -x vW"
-      samtools_cmd2 <- paste0(" | cut -f3,4,5,6,10,12,13,14 | grep 'XT' | sed 's/XT:Z://' | sed 's/UB:Z://' | sed 's/",BCtag,":Z://' | awk 'BEGIN{IFS=\"\t\";OFS=\"\t\";}{print $1,$2,$3,$4,$5,$6,$8,$7;}' | awk '{if($3 == \"255\"){print > \"",outpath,"\"$1\".var_overlap.readsout\"}}'")
+    if(hammingflag){
+      samtools_cmd1 <- "view -@2 -x BQ -x UQ -x ES -x IS -x EN -x IN -x GI -x BX -x UX -x NH -x AS -x nM -x HI -x IH -x NM -x uT -x MD -x jM -x jI -x XN -x XS -x vA -x vG -x vW"
+      samtools_cmd2 <- paste0(" | cut -f3,4,5,6,10,12,13,14 | grep '",genetag,"' | sed 's/",genetag,":Z://' | sed 's/UB:Z://' | sed 's/",BCtag,":Z://' | awk 'BEGIN{IFS=\"\t\";OFS=\"\t\";}{print $1,$2,$3,$4,$5,$6,$8,$7;}' | awk '{if($3 == \"255\"){print > \"",outpath,"\"$1\".var_overlap.readsout\"}}'")
     }else{
-      path_bam <- paste0(opt$out_dir,"/",opt$project,".filtered.tagged.Aligned.out.bam.ex.featureCounts.bam")
-      samtools_cmd1 <- "view -@2 -x BX -x UX -x NH -x AS -x nM -x HI -x IH -x NM -x uT -x MD -x jM -x jI -x XN -x XS -x vA -x vG -x vW"
-      samtools_cmd2 <- paste0(" | cut -f3,4,5,6,10,12,13,14 | grep 'XT' | sed 's/XT:Z://' | sed 's/UB:Z://' | sed 's/",BCtag,":Z://' | awk '{if($3 == \"255\"){print > \"",outpath,"\"$1\".var_overlap.readsout\"}}'")
+      samtools_cmd1 <- "view -@2 -x BQ -x UQ -x ES -x IS -x EN -x IN -x GI -x BX -x UX -x NH -x AS -x nM -x HI -x IH -x NM -x uT -x MD -x jM -x jI -x XN -x XS -x vA -x vG -x vW"
+      samtools_cmd2 <- paste0(" | cut -f3,4,5,6,10,12,13,14 | grep '",genetag,"' | sed 's/",genetag,":Z://' | sed 's/",BCtag,":Z://' | awk '{if($3 == \"255\"){print > \"",outpath,"\"$1\".var_overlap.readsout\"}}'")
     }
   }else{
-    path_bam <- paste0(opt$out_dir,"/",opt$project,".filtered.tagged.Aligned.out.bam.ex.featureCounts.bam")
-    samtools_cmd1 <- "view -@2 -x BX -x UX -x NH -x AS -x nM -x HI -x IH -x NM -x uT -x MD -x jM -x jI -x XN -x XS -x vA -x vG -x vW -x UB"
-    samtools_cmd2 <- paste0(" | cut -f3,4,5,6,10,12,13 | grep 'XT' | sed 's/XT:Z://' | sed 's/",BCtag,":Z://' | awk '{if($3 == \"255\"){print > \"",outpath,"\"$1\".var_overlap.readsout\"}}'")
+    samtools_cmd1 <- "view -@2 -x BQ -x UQ -x ES -x IS -x EN -x IN -x GI -x BX -x UX -x NH -x AS -x nM -x HI -x IH -x NM -x uT -x MD -x jM -x jI -x XN -x XS -x vA -x vG -x vW -x UB"
+    samtools_cmd2 <- paste0(" | cut -f3,4,5,6,10,12,13 | grep '",genetag,"' | sed 's/",genetag,":Z://' | sed 's/",BCtag,":Z://' | awk '{if($3 == \"255\"){print > \"",outpath,"\"$1\".var_overlap.readsout\"}}'")
   }
   samtools_cmd <- paste(samtoolsexc,samtools_cmd1,path_bam,samtools_cmd2)
   system(samtools_cmd)
