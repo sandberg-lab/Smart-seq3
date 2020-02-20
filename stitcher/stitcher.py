@@ -316,7 +316,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
     infile = args.i[0]
     outfile = args.o[0]
-    cells = args.cells[0]
+    
+    if args.cells is None:
+        cells = args.cells
+    else:
+        cells = args.cells[0]
     if args.contig is None:
         contig = args.contig
     else:
