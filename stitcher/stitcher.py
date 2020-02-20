@@ -7,13 +7,13 @@ import numpy as np
 from interval import interval
 import sys
 
-def update_phred_match(p_x,p_y):
-    new_p = ((p_x*p_y)/3)*(1-p_x-p_y+(4*p_x*p_y)/3)
-    return new_p
-
-def update_phred_mismatch(p_x,p_y):
-    new_p = (p_x*((1-p_y)/3))*(p_x+p_y-(4*p_x*p_y)/3)
-    return new_p
+def make_ll_array(e):
+    p=e[0]
+    i=e[1]
+    y = np.repeat(p/3, 4)
+    if i != 4:
+        y[i] = 1-p
+    return np.log10(y)
 
 def get_insertions_locs(cigtuples):
     insertion_locs = []
@@ -37,58 +37,12 @@ def get_skipped_intervals(cigtuples, ref_positions):
             skipped_locs = skipped_locs | interval[ref_positions[l-1]+1, ref_positions[l]-1]
     return skipped_locs
 
-def get_ref_intervals(master_read):
-    ref_intervals = interval[master_read['ref_positions'][0], master_read['ref_positions'][1]] 
-    for i in range(len(master_read['ref_positions'])-2):
-        if (master_read['ref_positions'][i+2] - master_read['ref_positions'][i+1]) == 1:
-            ref_intervals = ref_intervals | interval[master_read['ref_positions'][i+1], master_read['ref_positions'][i+2]]
+def get_ref_intervals(ref_positions):
+    ref_intervals = interval[ref_positions[0], ref_positions[1]] 
+    for i in range(len(ref_positions)-2):
+        if (ref_positions[i+2] - ref_positions[i+1]) == 1:
+            ref_intervals = ref_intervals | interval[ref_positions[i+1],ref_positions[i+2]]
     return ref_intervals
-
-def merge_reads(master_read, new_read):
-    intersection_positions = list(set(master_read['ref_positions']).intersection(set(new_read['ref_positions'])))
-    new_positions = list(set(new_read['ref_positions']) - set(master_read['ref_positions']))
-    
-    master_series_seq = pd.Series(master_read['seq'], index = master_read['ref_positions'])
-    master_series_qual = pd.Series(master_read['p_x'], index = master_read['ref_positions'])
-    
-    
-    new_series_seq = pd.Series(new_read['seq'], index = new_read['ref_positions'])
-    new_series_qual = pd.Series(new_read['p_x'], index = new_read['ref_positions'])
-    
-    
-    same_seq = master_series_seq[intersection_positions] == new_series_seq[intersection_positions]
-    mismatch_positions = same_seq[~same_seq].index
-    master_best = master_series_qual[mismatch_positions] < new_series_qual[mismatch_positions]
-   # print('overlapped positions: {}, new positions: {}, mismatches: {}, master best: {}, new best: {} '
-    #      .format(len(intersection_positions), len(new_positions),len(mismatch_positions), sum(master_best), sum(~master_best)))
-    # update phred score for matches
-    master_series_qual[same_seq[same_seq].index] = update_phred_match(master_series_qual[same_seq[same_seq].index], new_series_qual[same_seq[same_seq].index])
-    
-    # update phred score for mismatches
-    if len(master_best) > 0:
-        master_series_qual[master_best[master_best].index] = update_phred_mismatch(master_series_qual[master_best[master_best].index], new_series_qual[master_best[master_best].index]) 
-        master_series_qual[master_best[~master_best].index] = update_phred_mismatch(new_series_qual[master_best[~master_best].index], master_series_qual[master_best[~master_best].index])
-    
-    # if the new sequence has a better score use that one
-    master_series_seq[master_best[~master_best].index] = new_series_seq[master_best[~master_best].index]
-    
-    # append new covered positions and their sequence
-    
-    master_series_seq = master_series_seq.append(new_series_seq[new_positions], verify_integrity=True)
-    master_series_qual = master_series_qual.append(new_series_qual[new_positions], verify_integrity=True)
-    
-    master_series_seq.sort_index(inplace=True)
-    master_series_qual.sort_index(inplace=True)
-    
-    master_read['p_x'] = list(master_series_qual.values)
-    master_read['seq'] = list(master_series_seq.values)
-    master_read['ref_positions'] = list(master_series_seq.index.values)
-    
-    master_read['skipped_intervals'] = master_read['skipped_intervals'] | new_read['skipped_intervals']
-    
-    #print('p_x: {}, seq: {}, ref_positions: {}, skipped_locs: {}'
-     #     .format(len(master_read['p_x'] ), len(master_read['seq']), len(master_read['ref_positions']), master_read['skipped_intervals']))
-    return master_read
 
 def get_del_intervals(ref_skip_union):
     prev_interval = None
@@ -105,12 +59,42 @@ def get_del_intervals(ref_skip_union):
             prev_interval = x
     return del_intervals
 
+def get_read_info(read):
+    if read.has_tag('GE'):
+        exonic = True
+    else:
+        exonic = False
+    if read.has_tag('GI'):
+        intronic = True
+    else:
+        intronic = False
+    p_x = list(10**(-np.float_(np.array(read.query_alignment_qualities))/10))
+    seq = [char for char in read.query_alignment_sequence]
+    cigtuples = read.cigartuples
+    insertion_locs = get_insertions_locs(cigtuples)
+    for loc in insertion_locs:
+            del seq[loc]
+            del p_x[loc]
+    ref_positions = read.get_reference_positions()
+    try:
+        skipped_intervals = get_skipped_intervals(cigtuples, ref_positions)
+    except IndexError:
+        print(read)
+    new_read = {'name': read.query_name, 'p_x': p_x, 'seq': seq, 'ref_positions': ref_positions,'skipped_intervals':skipped_intervals,
+               'intronic': intronic, 'exonic': exonic}
+    return new_read
+
 def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
-    master_read = None
+    master_read = {}
+    seq_df = None
+    qual_df = None
     reverse_read1 = []
     read_ends = []
     read_starts = []
+    exonic_list = []
+    intronic_list = []
     for read in read_d:
+
         if mol_dict is None:
             if read.is_read1:
                 reverse_read1.append(read.is_reverse)
@@ -124,24 +108,35 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
             else:
                 if read.is_reverse:
                     read_ends.append(read.reference_end)
-        p_x = list(10**-(np.float_(np.array(read.query_alignment_qualities))/10))
-        seq = [char for char in read.query_alignment_sequence]
-        cigtuples = read.cigartuples
-        insertion_locs = get_insertions_locs(cigtuples)
-        for loc in insertion_locs:
-                del seq[loc]
-                del p_x[loc]
-        ref_positions = read.get_reference_positions()
-        try:
-            skipped_intervals = get_skipped_intervals(cigtuples, ref_positions)
-        except IndexError:
-            print(read)
-        new_read = {'p_x': p_x, 'seq': seq, 'ref_positions': ref_positions,'skipped_intervals':skipped_intervals}
-        if master_read is None:
-            master_read = new_read
-        master_read = merge_reads(master_read, new_read)
+        r_info = get_read_info(read)
+        exonic_list.append(r_info['exonic'])
+        intronic_list.append(r_info['intronic'])
+        seq_series = pd.Series(r_info['seq'], index=r_info['ref_positions'])
+        seq_series.name = r_info['name']
+        qual_series = pd.Series(r_info['p_x'], index=r_info['ref_positions'])
+        qual_series.name = r_info['name']
+        if seq_df is None:
+            seq_df = pd.DataFrame(seq_series)
+            qual_df = pd.DataFrame(qual_series)
+        else:
+            seq_df = seq_df.join(seq_series,how='outer', rsuffix = '_right')
+            qual_df = qual_df.join(qual_series,how='outer', rsuffix = '_right')
+        if len(master_read) == 0:
+            master_read['skipped_intervals'] = r_info['skipped_intervals']
+        else:
+            master_read['skipped_intervals'] = master_read['skipped_intervals'] | r_info['skipped_intervals']
     master_read['SN'] = read.reference_name
+    seq_df = seq_df.replace(['A','T', 'C', 'G', np.nan],[0,1,2,3,4])
+    qual_df = qual_df.replace(np.nan, 1)
+    merged_df = pd.DataFrame(np.rec.fromarrays((qual_df.values, seq_df.values)).tolist(), 
+                      columns=qual_df.columns,
+                      index=qual_df.index)
+    qual_probs = 10**(merged_df.applymap(make_ll_array).apply(lambda x: np.concatenate(list(x))).sum(axis=1)).values.reshape(qual_df.shape[0], 4)
+    normed_probs = qual_probs/qual_probs.sum(axis=1)[:, np.newaxis]
     
+    master_read['seq'] = ''.join([nucleotides[x] for x in np.argmax(normed_probs, axis=1)])
+    master_read['phred'] = np.rint(-10*np.log10(1-np.max(normed_probs, axis=1)))
+    master_read['phred'][master_read['phred'] == np.inf] = 126
     if mol_dict is None:
         v, c = np.unique(reverse_read1, return_counts=True)
         m = c.argmax()
@@ -152,27 +147,55 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
         master_read['ends'] = list(set(read_starts))
     else:
         master_read['ends'] = list(set(read_ends))
-    master_read['ref_intervals'] = get_ref_intervals(master_read)
+    master_read['ref_intervals'] = get_ref_intervals(seq_df.index)
     ref_skip_union = (master_read['ref_intervals'] | master_read['skipped_intervals'])
     master_read['del_intervals'] =  get_del_intervals(ref_skip_union)
-    del master_read['ref_positions']
-    master_read['phred'] = np.rint(-10*np.log10(master_read['p_x']))
-    del master_read['p_x']
-    master_read['seq'] = ''.join(master_read['seq'])
     master_read['NR'] = len(read_d)
+    master_read['intronic_reads'] = sum(intronic_list)
+    master_read['exonic_reads'] = sum(exonic_list)
     return master_read
 
 def make_read_dict(bamfile,contig, read_dict = {}):
     for read in bamfile.fetch(contig):
-        if read.is_paired and not read.is_unmapped and not read.mate_is_unmapped and read.has_tag('XT'):
-            cell = read.get_tag('BC')
-            gene = read.get_tag('XT')
+        if read.is_paired and not read.is_unmapped and not read.mate_is_unmapped:
             umi = read.get_tag('UB')
+            if umi == '':
+                continue
+            if read.has_tag('GE'):
+                gene_exon = read.get_tag('GE')
+            else:
+                gene_exon = 'Unassigned'
+            if read.has_tag('GI'):
+                gene_intron = read.get_tag('GI')
+            else:
+                gene_intron = 'Unassigned'
+            
+            # if it maps to the intron or exon of a gene
+            if gene_intron != 'Unassigned' or gene_exon != 'Unassigned':
+                # if it is a junction read
+                if gene_intron == gene_exon:
+                    gene = gene_intron
+                # if it's an only intronic read
+                elif gene_intron != 'Unassigned' and gene_intron != gene_exon:
+                    gene = gene_intron
+                # if it's an only exonic read
+                elif gene_exon != 'Unassigned' and gene_intron != gene_exon:
+                    gene = gene_exon
+                # if the exon and intron gene tag contradict each other
+                else:
+                    print('contradiction')
+                    continue
+            else:
+                continue
+            cell = read.get_tag('BC')
+            umi = read.get_tag('UB')
+            
             if cell in read_dict.keys():
                 if gene in read_dict[cell].keys():
                     if umi in read_dict[cell][gene].keys():
                         read_dict[cell][gene][umi].append(read)
                     else:
+                        
                         read_dict[cell][gene][umi] = [read]
                 else:
                     read_dict[cell][gene] = {}
@@ -181,6 +204,7 @@ def make_read_dict(bamfile,contig, read_dict = {}):
                 read_dict[cell] = {}
                 read_dict[cell][gene] = {}
                 read_dict[cell][gene][umi] = [read]
+            
     return read_dict
 
 def make_merged_dict(read_dict, spec_strand = False, mol_dict = None):
