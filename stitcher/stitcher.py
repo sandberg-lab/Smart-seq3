@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 from interval import interval
 import sys
-
+nucleotides = ['A', 'T', 'C', 'G']
 def make_ll_array(e):
     p=e[0]
     i=e[1]
