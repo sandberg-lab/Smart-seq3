@@ -126,7 +126,7 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
         else:
             master_read['skipped_intervals'] = master_read['skipped_intervals'] | r_info['skipped_intervals']
     master_read['SN'] = read.reference_name
-    seq_df = seq_df.replace(['A','T', 'C', 'G', np.nan, 'N'],[0,1,2,3,4])
+    seq_df = seq_df.replace(['A','T', 'C', 'G', np.nan, 'N'],[0,1,2,3,4,4])
     qual_df = qual_df.replace(np.nan, 3)
     merged_df = pd.DataFrame(np.rec.fromarrays((qual_df.values, seq_df.values)).tolist(), 
                       columns=qual_df.columns,
