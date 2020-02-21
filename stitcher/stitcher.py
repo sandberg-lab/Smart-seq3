@@ -126,17 +126,16 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
         else:
             master_read['skipped_intervals'] = master_read['skipped_intervals'] | r_info['skipped_intervals']
     master_read['SN'] = read.reference_name
-    seq_df = seq_df.replace(['A','T', 'C', 'G', np.nan],[0,1,2,3,4])
-    qual_df = qual_df.replace(np.nan, 1)
+    seq_df = seq_df.replace(['A','T', 'C', 'G', np.nan, 'N'],[0,1,2,3,4])
+    qual_df = qual_df.replace(np.nan, 3)
     merged_df = pd.DataFrame(np.rec.fromarrays((qual_df.values, seq_df.values)).tolist(), 
                       columns=qual_df.columns,
                       index=qual_df.index)
     qual_probs = 10**(merged_df.applymap(make_ll_array).apply(lambda x: np.concatenate(list(x))).sum(axis=1)).values.reshape(qual_df.shape[0], 4)
     normed_probs = qual_probs/qual_probs.sum(axis=1)[:, np.newaxis]
-    
-    master_read['seq'] = ''.join([nucleotides[x] for x in np.argmax(normed_probs, axis=1)])
-    master_read['phred'] = np.rint(-10*np.log10(1-np.max(normed_probs, axis=1)))
-    master_read['phred'][master_read['phred'] == np.inf] = 126
+    prob_max = np.max(normed_probs, axis=1)
+    master_read['seq'] = ''.join([nucleotides[x] if p > 0.3 else 'N' for p,x in zip(prob_max, np.argmax(normed_probs, axis=1))])
+    master_read['phred'] = np.rint(-10*np.log10(1-prob_max+1e-13))
     if mol_dict is None:
         v, c = np.unique(reverse_read1, return_counts=True)
         m = c.argmax()
@@ -151,8 +150,8 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
     ref_skip_union = (master_read['ref_intervals'] | master_read['skipped_intervals'])
     master_read['del_intervals'] =  get_del_intervals(ref_skip_union)
     master_read['NR'] = len(read_d)
-    master_read['intronic_reads'] = sum(intronic_list)
-    master_read['exonic_reads'] = sum(exonic_list)
+    master_read['IR'] = sum(intronic_list)
+    master_read['ER'] = sum(exonic_list)
     return master_read
 
 def make_read_dict(bamfile,contig, read_dict = {}):
@@ -263,6 +262,8 @@ def convert_to_sam(stitched_m, cell, gene, umi):
     sam_dict['SEQ'] = stitched_m['seq']
     sam_dict['QUAL'] = "".join([chr(int(p)) for p in np.clip(stitched_m['phred'],0,126-33)+33])
     sam_dict['NR'] = 'NR:i:{}'.format(stitched_m['NR'])
+    sam_dict['ER'] = 'ER:i:{}'.format(stitched_m['ER'])
+    sam_dict['IR'] = 'IR:i:{}'.format(stitched_m['IR'])
     sam_dict['BC'] = 'BC:Z:{}'.format(cell)
     sam_dict['XT'] = 'XT:Z:{}'.format(gene)
     sam_dict['UB'] = 'UB:Z:{}'.format(umi)
