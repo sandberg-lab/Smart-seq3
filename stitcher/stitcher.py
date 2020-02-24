@@ -317,7 +317,7 @@ def construct_stitched_molecules(infile, outfile, cells, contig, threads):
 
     print('Stitching reads into molecules for {}'.format(infile))
     start = time.time()
-    stitched_mols = Parallel(n_jobs=threads, verbose = 3)(delayed(stitch_reads)(*d) for d in yield_reads(rd))
+    stitched_mols = Parallel(n_jobs=threads, verbose = 3)(delayed(stitch_reads)(*d) for d in yield_reads(read_dict))
     end = time.time()
     print('Finished stitching reads into molecules for {}, took {}'.format(infile, get_time_formatted(end-start)))
 
