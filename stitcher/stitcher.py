@@ -100,7 +100,9 @@ def get_read_info(read):
     except IndexError:
         print(read)
     new_read = {'name': read.query_name, 'p_x': p_x, 'seq': seq, 'ref_positions': ref_positions,'skipped_intervals':skipped_intervals,
-               'intronic': intronic, 'exonic': exonic}
+               'intronic': intronic, 'exonic': exonic,
+                'is_reverse': read.is_reverse, 'reference_name': read.reference_name, 'reference_start': read.reference_start, 
+               'reference_end': read.reference_end, 'is_read1': read.is_read1}
     return new_read
 
 def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
@@ -338,7 +340,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     infile = args.i[0]
     outfile = args.o[0]
-    threads = args.t[0]
+    threads = args.t
     if args.cells is None:
         cells = args.cells
     else:
