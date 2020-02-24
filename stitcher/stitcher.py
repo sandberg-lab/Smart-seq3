@@ -325,7 +325,7 @@ def construct_stitched_molecules(infile, outfile, cells, contig, threads):
 
     print('Writing stitched molecules from {} to {}'.format(infile, outfile))
     start = time.time()
-    write_sam_file(merged_dict, outfile, bamfile)
+    write_sam_file(stitched_mols, outfile, bamfile)
     end = time.time()
     print('Finished writing stitched molecules from {} to {}, took {}'.format(infile, outfile, get_time_formatted(end-start)))
     return None
