@@ -170,6 +170,8 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
     ref_skip_union = (master_read['ref_intervals'] | master_read['skipped_intervals'])
     master_read['del_intervals'] =  get_del_intervals(ref_skip_union)
     master_read['NR'] = len(read_d)
+    master_read['IR'] = sum(intronic_list)
+    master_read['ER'] = sum(exonic_list)
     master_read['intronic_reads'] = sum(intronic_list)
     master_read['exonic_reads'] = sum(exonic_list)
     master_read['cell'] = cell
