@@ -6,6 +6,9 @@ import pandas as pd
 import numpy as np
 from interval import interval
 import sys
+import time
+from joblib import delayed,Parallel
+
 nucleotides = ['A', 'T', 'C', 'G']
 def make_ll_array(e):
     p=e[0]
@@ -14,6 +17,22 @@ def make_ll_array(e):
     if i != 4:
         y[i] = 1-p
     return np.log10(y)
+
+def get_time_formatted(time):
+    day = time // (24 * 3600)
+    time = time % (24 * 3600)
+    hour = time // 3600
+    time %= 3600
+    minutes = time // 60
+    time %= 60
+    seconds = time
+    s = ''.join(['{} day{}, '.format(day, 's'*(1 != day))*(0 != day), 
+                 '{} hour{}, '.format(hour,'s'*(1 != hour))*(0 != hour), 
+                 '{} minute{}, '.format(minutes,'s'*(1 != minutes))*(0 != minutes), 
+                 '{:.2f} second{}, '.format(seconds,'s'*(1 != seconds))*(0 != seconds)])
+    s = s[:-2]
+    s = s + '.'
+    return s
 
 def get_insertions_locs(cigtuples):
     insertion_locs = []
@@ -96,25 +115,24 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
     for read in read_d:
 
         if mol_dict is None:
-            if read.is_read1:
-                reverse_read1.append(read.is_reverse)
+            if read['is_read1']:
+                reverse_read1.append(read['is_reverse'])
             else:
-                read_starts.append(read.reference_start)
-                read_ends.append(read.reference_end)
+                read_starts.append(read['reference_start'])
+                read_ends.append(read['reference_end'])
         else:
-            if mol_dict[cell][gene][umi].is_reverse:
-                if not read.is_reverse:
-                    read_starts.append(read.reference_start)
+            if mol_dict[cell][gene][umi]['is_reverse']:
+                if not read['is_reverse']:
+                    read_starts.append(read['reference_start'])
             else:
-                if read.is_reverse:
-                    read_ends.append(read.reference_end)
-        r_info = get_read_info(read)
-        exonic_list.append(r_info['exonic'])
-        intronic_list.append(r_info['intronic'])
-        seq_series = pd.Series(r_info['seq'], index=r_info['ref_positions'])
-        seq_series.name = r_info['name']
-        qual_series = pd.Series(r_info['p_x'], index=r_info['ref_positions'])
-        qual_series.name = r_info['name']
+                if read['is_reverse']:
+                    read_ends.append(read['reference_end'])
+        exonic_list.append(read['exonic'])
+        intronic_list.append(read['intronic'])
+        seq_series = pd.Series(read['seq'], index=read['ref_positions'])
+        seq_series.name = read['name']
+        qual_series = pd.Series(read['p_x'], index=read['ref_positions'])
+        qual_series.name = read['name']
         if seq_df is None:
             seq_df = pd.DataFrame(seq_series)
             qual_df = pd.DataFrame(qual_series)
@@ -122,20 +140,21 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
             seq_df = seq_df.join(seq_series,how='outer', rsuffix = '_right')
             qual_df = qual_df.join(qual_series,how='outer', rsuffix = '_right')
         if len(master_read) == 0:
-            master_read['skipped_intervals'] = r_info['skipped_intervals']
+            master_read['skipped_intervals'] = read['skipped_intervals']
         else:
-            master_read['skipped_intervals'] = master_read['skipped_intervals'] | r_info['skipped_intervals']
-    master_read['SN'] = read.reference_name
-    seq_df = seq_df.replace(['A','T', 'C', 'G', np.nan, 'N'],[0,1,2,3,4,4])
+            master_read['skipped_intervals'] = master_read['skipped_intervals'] | read['skipped_intervals']
+    master_read['SN'] = read['reference_name']
     qual_df = qual_df.replace(np.nan, 3)
+    seq_df = seq_df.replace(['A','T', 'C', 'G', np.nan, 'N'],[0,1,2,3,4,4])
     merged_df = pd.DataFrame(np.rec.fromarrays((qual_df.values, seq_df.values)).tolist(), 
                       columns=qual_df.columns,
                       index=qual_df.index)
     qual_probs = 10**(merged_df.applymap(make_ll_array).apply(lambda x: np.concatenate(list(x))).sum(axis=1)).values.reshape(qual_df.shape[0], 4)
     normed_probs = qual_probs/qual_probs.sum(axis=1)[:, np.newaxis]
     prob_max = np.max(normed_probs, axis=1)
-    master_read['seq'] = ''.join([nucleotides[x] if p > 0.3 else 'N' for p,x in zip(prob_max, np.argmax(normed_probs, axis=1))])
-    master_read['phred'] = np.rint(-10*np.log10(1-prob_max+1e-13))
+    master_read['seq'] = ''.join([nucleotides[x] if p > 0.3 else 'N' for p, x in zip(prob_max, np.argmax(normed_probs, axis=1))])
+    master_read['phred'] = np.rint(-10*np.log10(1-prob_max))
+    master_read['phred'][master_read['phred'] == np.inf] = 126
     if mol_dict is None:
         v, c = np.unique(reverse_read1, return_counts=True)
         m = c.argmax()
@@ -150,13 +169,20 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
     ref_skip_union = (master_read['ref_intervals'] | master_read['skipped_intervals'])
     master_read['del_intervals'] =  get_del_intervals(ref_skip_union)
     master_read['NR'] = len(read_d)
-    master_read['IR'] = sum(intronic_list)
-    master_read['ER'] = sum(exonic_list)
+    master_read['intronic_reads'] = sum(intronic_list)
+    master_read['exonic_reads'] = sum(exonic_list)
+    master_read['cell'] = cell
+    master_read['gene'] = gene
+    master_read['umi'] = umi
     return master_read
 
-def make_read_dict(bamfile,contig, read_dict = {}):
+def make_read_dict(bamfile,contig, read_dict = {}, cell_list = None):
     for read in bamfile.fetch(contig):
         if read.is_paired and not read.is_unmapped and not read.mate_is_unmapped:
+            cell = read.get_tag('BC')
+            if cell_list is not None:
+                 if cell not in cell_list:
+                      continue
             umi = read.get_tag('UB')
             if umi == '':
                 continue
@@ -186,42 +212,26 @@ def make_read_dict(bamfile,contig, read_dict = {}):
                     continue
             else:
                 continue
-            cell = read.get_tag('BC')
+
             umi = read.get_tag('UB')
             
             if cell in read_dict.keys():
                 if gene in read_dict[cell].keys():
                     if umi in read_dict[cell][gene].keys():
-                        read_dict[cell][gene][umi].append(read)
+                        read_dict[cell][gene][umi].append(get_read_info(read))
                     else:
                         
-                        read_dict[cell][gene][umi] = [read]
+                        read_dict[cell][gene][umi] = [get_read_info(read)]
                 else:
                     read_dict[cell][gene] = {}
-                    read_dict[cell][gene][umi] = [read]
+                    read_dict[cell][gene][umi] = [get_read_info(read)]
             else:
                 read_dict[cell] = {}
                 read_dict[cell][gene] = {}
-                read_dict[cell][gene][umi] = [read]
+                read_dict[cell][gene][umi] = [get_read_info(read)]
             
     return read_dict
 
-def make_merged_dict(read_dict, spec_strand = False, mol_dict = None):
-    merged_dict = {}
-    for cell in read_dict.keys():
-        #print(cell)
-        merged_dict[cell] = {}
-        for gene in read_dict[cell].keys():
-            #print('\t', gene)
-            merged_dict[cell][gene] = {}
-            for umi in read_dict[cell][gene].keys():
-                if umi != '':
-                    #print('\t\t', umi)
-                    if spec_strand:
-                        merged_dict[cell][gene][umi] = stitch_reads(read_dict[cell][gene][umi], mol_dict, cell, gene, umi)
-                    else:
-                        merged_dict[cell][gene][umi] = stitch_reads(read_dict[cell][gene][umi])
-    return merged_dict
 
 def make_POS_and_CIGAR(stitched_m):
     CIGAR = ''
@@ -247,7 +257,7 @@ def make_POS_and_CIGAR(stitched_m):
         CIGAR = '*'
     return POS, CIGAR, sum(l) != len(stitched_m['seq'])
 
-def convert_to_sam(stitched_m, cell, gene, umi):
+def convert_to_sam(stitched_m):
     sam_dict = {}
     POS, CIGAR, conflict = make_POS_and_CIGAR(stitched_m)
     sam_dict['QNAME'] = '{}:{}:{}'.format(cell,gene,umi)
@@ -264,60 +274,71 @@ def convert_to_sam(stitched_m, cell, gene, umi):
     sam_dict['NR'] = 'NR:i:{}'.format(stitched_m['NR'])
     sam_dict['ER'] = 'ER:i:{}'.format(stitched_m['ER'])
     sam_dict['IR'] = 'IR:i:{}'.format(stitched_m['IR'])
-    sam_dict['BC'] = 'BC:Z:{}'.format(cell)
-    sam_dict['XT'] = 'XT:Z:{}'.format(gene)
-    sam_dict['UB'] = 'UB:Z:{}'.format(umi)
+    sam_dict['BC'] = 'BC:Z:{}'.format(stitched_m['cell'])
+    sam_dict['XT'] = 'XT:Z:{}'.format(stitched_m['gene'])
+    sam_dict['UB'] = 'UB:Z:{}'.format(stitched_m['umi'])
     sam_dict['EL'] = 'EL:B:I,{}'.format(','.join([str(e) for e in stitched_m['ends']]))
     return '\t'.join(list(sam_dict.values())) + '\n'
 
-def stitched_mols(merged_dict):
-    for cell in merged_dict:
-        print(cell)
-        for gene in merged_dict[cell]:
+def yield_reads(read_dict):
+    for cell in read_dict:
+        for gene in read_dict[cell]:
             #print('\t', gene)
-            for umi in merged_dict[cell][gene]:
+            for umi in read_dict[cell][gene]:
                 #print('\t\t', umi)
-                yield merged_dict[cell][gene][umi], cell, gene, umi
+                yield read_dict[cell][gene][umi], None, cell, gene, umi
 
-
-def write_sam_file(merged_dict, filename, bamfile):
+def write_sam_file(stitched_mols, filename, bamfile):
     with open(filename, 'w') as samfile:
         # write header
         samfile.write('@HD\tVN:1.0\tSO:unknown\n')
         for SQ in bamfile.header['SQ']:
             samfile.write('@SQ\tSN:{}\tLN:{}\n'.format(SQ['SN'],SQ['LN']))
         samfile.write('@PG\tID:stitcher\tVN:0.1\n')
-        for mol in stitched_mols(merged_dict):
-            samfile.write(convert_to_sam(*mol))
+        for mol in stitched_mols:
+            samfile.write(convert_to_sam(mol))
         samfile.truncate()
     return None
 
 def extract(d, keys):
     return dict((k, d[k]) for k in keys if k in d)
 
-def construct_stitched_molecules(infile, outfile, cells, contig):
-    bamfile = pysam.AlignmentFile(infile, 'rb')
+def construct_stitched_molecules(infile, outfile, cells, contig, threads):
     print('Gathering reads for {}'.format(infile))
-    read_dict = make_read_dict(bamfile, contig, read_dict={})
+    start = time.time()
+    bamfile = pysam.AlignmentFile(infile, 'rb')
     if cells is not None:
         cell_list = [line.rstrip() for line in open(cells)]
-        read_dict = extract(read_dict, cell_list)
+    else:
+        cell_list = None
+    read_dict = make_read_dict(bamfile, contig, read_dict={}, cell_list = cell_list)
+    end = time.time()
+    print('Finished gathering reads for {}, took {}'.format(infile, get_time_formatted(end-start)))
+
     print('Stitching reads into molecules for {}'.format(infile))
-    merged_dict = make_merged_dict(read_dict)
+    start = time.time()
+    stitched_mols = Parallel(n_jobs=threads, verbose = 3)(delayed(stitch_reads)(*d) for d in yield_reads(rd))
+    end = time.time()
+    print('Finished stitching reads into molecules for {}, took {}'.format(infile, get_time_formatted(end-start)))
+
     print('Writing stitched molecules from {} to {}'.format(infile, outfile))
+    start = time.time()
     write_sam_file(merged_dict, outfile, bamfile)
+    end = time.time()
+    print('Finished writing stitched molecules from {} to {}, took {}'.format(infile, outfile, get_time_formatted(end-start)))
     return None
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Stitch together molecules from reads sharing the same UMI')
     parser.add_argument('--i',metavar='input', type=str, nargs=1, help='Input .bam file')
     parser.add_argument('--o', metavar='output', type=str, nargs=1, help='Output .sam file')
+    parser.add_argument('--t', metavar='threads', type=int, nargs=1, default=1, help='Number of threads')
     parser.add_argument('--cells', default=None, metavar='cells', type=str, nargs=1, help='List of cell barcodes to stitch molecules')
     parser.add_argument('--contig', default=None, metavar='contig', type=str, nargs=1, help='Restrict stitching to contig')
     args = parser.parse_args()
     infile = args.i[0]
     outfile = args.o[0]
-    
+    threads = args.t[0]
     if args.cells is None:
         cells = args.cells
     else:
@@ -326,4 +347,4 @@ if __name__ == '__main__':
         contig = args.contig
     else:
         contig = args.contig[0]
-    construct_stitched_molecules(infile, outfile, cells, contig)
+    construct_stitched_molecules(infile, outfile, cells, contig, threads)
