@@ -335,13 +335,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Stitch together molecules from reads sharing the same UMI')
     parser.add_argument('--i',metavar='input', type=str, nargs=1, help='Input .bam file')
     parser.add_argument('--o', metavar='output', type=str, nargs=1, help='Output .sam file')
-    parser.add_argument('--t', metavar='threads', type=int, nargs=1, default=1, help='Number of threads')
+    parser.add_argument('--t', metavar='threads', type=int, nargs=1, default=[1], help='Number of threads')
     parser.add_argument('--cells', default=None, metavar='cells', type=str, nargs=1, help='List of cell barcodes to stitch molecules')
     parser.add_argument('--contig', default=None, metavar='contig', type=str, nargs=1, help='Restrict stitching to contig')
     args = parser.parse_args()
     infile = args.i[0]
     outfile = args.o[0]
-    threads = args.t
+    threads = int(args.t[0])
     if args.cells is None:
         cells = args.cells
     else:
