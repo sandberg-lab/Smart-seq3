@@ -11,7 +11,7 @@ import time
 import os
 from joblib import delayed,Parallel
 from multiprocessing import Process, JoinableQueue
-
+os.system("taskset -p 0xff %d" % os.getpid())
 __version__ = '1.0'
 nucleotides = ['A', 'T', 'C', 'G']
 np.seterr(divide='ignore')
