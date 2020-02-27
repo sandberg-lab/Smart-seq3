@@ -11,8 +11,11 @@ import time
 import os
 from joblib import delayed,Parallel
 from multiprocessing import Process, JoinableQueue
+
 __version__ = '1.0'
 nucleotides = ['A', 'T', 'C', 'G']
+np.seterr(divide='ignore')
+
 def make_ll_array(e):
     p=e[0]
     i=e[1]
