@@ -1,14 +1,17 @@
-# V 0.4
+# V 1.0
 # anton jm larsson anton.larsson@ki.se
 import argparse
 import pysam
 import pandas as pd
 import numpy as np
+import pygtrie
 from interval import interval
 import sys
 import time
+import os
 from joblib import delayed,Parallel
-
+from multiprocessing import Process, JoinableQueue
+__version__ = '1.0'
 nucleotides = ['A', 'T', 'C', 'G']
 def make_ll_array(e):
     p=e[0]
@@ -78,32 +81,6 @@ def get_del_intervals(ref_skip_union):
             prev_interval = x
     return del_intervals
 
-def get_read_info(read):
-    if read.has_tag('GE'):
-        exonic = True
-    else:
-        exonic = False
-    if read.has_tag('GI'):
-        intronic = True
-    else:
-        intronic = False
-    p_x = list(10**(-np.float_(np.array(read.query_alignment_qualities))/10))
-    seq = [char for char in read.query_alignment_sequence]
-    cigtuples = read.cigartuples
-    insertion_locs = get_insertions_locs(cigtuples)
-    for loc in insertion_locs:
-            del seq[loc]
-            del p_x[loc]
-    ref_positions = read.get_reference_positions()
-    try:
-        skipped_intervals = get_skipped_intervals(cigtuples, ref_positions)
-    except IndexError:
-        print(read)
-    new_read = {'name': read.query_name, 'p_x': p_x, 'seq': seq, 'ref_positions': ref_positions,'skipped_intervals':skipped_intervals,
-               'intronic': intronic, 'exonic': exonic,
-                'is_reverse': read.is_reverse, 'reference_name': read.reference_name, 'reference_start': read.reference_start, 
-               'reference_end': read.reference_end, 'is_read1': read.is_read1}
-    return new_read
 
 def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
     master_read = {}
@@ -115,26 +92,45 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
     exonic_list = []
     intronic_list = []
     for read in read_d:
-
-        if mol_dict is None:
-            if read['is_read1']:
-                reverse_read1.append(read['is_reverse'])
-            else:
-                read_starts.append(read['reference_start'])
-                read_ends.append(read['reference_end'])
+        if read.has_tag('GE'):
+            exonic = True
         else:
-            if mol_dict[cell][gene][umi]['is_reverse']:
-                if not read['is_reverse']:
-                    read_starts.append(read['reference_start'])
+            exonic = False
+        if read.has_tag('GI'):
+            intronic = True
+        else:
+            intronic = False
+        p_x = list(10**(-np.float_(np.array(read.query_alignment_qualities))/10))
+        seq = [char for char in read.query_alignment_sequence]
+        cigtuples = read.cigartuples
+        insertion_locs = get_insertions_locs(cigtuples)
+        for loc in insertion_locs:
+                del seq[loc]
+                del p_x[loc]
+        ref_positions = read.get_reference_positions()
+        try:
+            skipped_intervals = get_skipped_intervals(cigtuples, ref_positions)
+        except IndexError:
+            print(read)
+        if mol_dict is None:
+            if read.is_read1:
+                reverse_read1.append(read.is_reverse)
             else:
-                if read['is_reverse']:
-                    read_ends.append(read['reference_end'])
-        exonic_list.append(read['exonic'])
-        intronic_list.append(read['intronic'])
-        seq_series = pd.Series(read['seq'], index=read['ref_positions'])
-        seq_series.name = read['name']
-        qual_series = pd.Series(read['p_x'], index=read['ref_positions'])
-        qual_series.name = read['name']
+                read_starts.append(read.reference_start)
+                read_ends.append(read.reference_end)
+        else:
+            if mol_dict[cell][gene][umi].is_reverse:
+                if not read.is_reverse:
+                    read_starts.append(read.reference_start)
+            else:
+                if read.is_reverse:
+                    read_ends.append(read.reference_end)
+        exonic_list.append(exonic)
+        intronic_list.append(intronic)
+        seq_series = pd.Series(seq, index=ref_positions)
+        seq_series.name = read.query_name
+        qual_series = pd.Series(p_x, index=ref_positions)
+        qual_series.name = read.query_name
         if seq_df is None:
             seq_df = pd.DataFrame(seq_series)
             qual_df = pd.DataFrame(qual_series)
@@ -142,10 +138,10 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
             seq_df = seq_df.join(seq_series,how='outer', rsuffix = '_right')
             qual_df = qual_df.join(qual_series,how='outer', rsuffix = '_right')
         if len(master_read) == 0:
-            master_read['skipped_intervals'] = read['skipped_intervals']
+            master_read['skipped_intervals'] = skipped_intervals
         else:
-            master_read['skipped_intervals'] = master_read['skipped_intervals'] | read['skipped_intervals']
-    master_read['SN'] = read['reference_name']
+            master_read['skipped_intervals'] = master_read['skipped_intervals'] | skipped_intervals
+    master_read['SN'] = read.reference_name
     qual_df = qual_df.replace(np.nan, 3)
     seq_df = seq_df.replace(['A','T', 'C', 'G', np.nan, 'N'],[0,1,2,3,4,4])
     merged_df = pd.DataFrame(np.rec.fromarrays((qual_df.values, seq_df.values)).tolist(), 
@@ -177,63 +173,64 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
     master_read['cell'] = cell
     master_read['gene'] = gene
     master_read['umi'] = umi
-    return master_read
+    q.put((True, convert_to_sam(master_read)))
+    return True
 
-def make_read_dict(bamfile,contig, read_dict = {}, cell_list = None):
-    for read in bamfile.fetch(contig):
-        if read.is_paired and not read.is_unmapped and not read.mate_is_unmapped:
-            cell = read.get_tag('BC')
-            if cell_list is not None:
-                 if cell not in cell_list:
-                      continue
-            umi = read.get_tag('UB')
-            if umi == '':
-                continue
-            if read.has_tag('GE'):
-                gene_exon = read.get_tag('GE')
-            else:
-                gene_exon = 'Unassigned'
-            if read.has_tag('GI'):
-                gene_intron = read.get_tag('GI')
-            else:
-                gene_intron = 'Unassigned'
-            
-            # if it maps to the intron or exon of a gene
-            if gene_intron != 'Unassigned' or gene_exon != 'Unassigned':
-                # if it is a junction read
-                if gene_intron == gene_exon:
-                    gene = gene_intron
-                # if it's an only intronic read
-                elif gene_intron != 'Unassigned' and gene_intron != gene_exon:
-                    gene = gene_intron
-                # if it's an only exonic read
-                elif gene_exon != 'Unassigned' and gene_intron != gene_exon:
-                    gene = gene_exon
-                # if the exon and intron gene tag contradict each other
-                else:
-                    print('contradiction')
-                    continue
-            else:
-                continue
 
-            umi = read.get_tag('UB')
-            
-            if cell in read_dict.keys():
-                if gene in read_dict[cell].keys():
-                    if umi in read_dict[cell][gene].keys():
-                        read_dict[cell][gene][umi].append(get_read_info(read))
-                    else:
-                        
-                        read_dict[cell][gene][umi] = [get_read_info(read)]
-                else:
-                    read_dict[cell][gene] = {}
-                    read_dict[cell][gene][umi] = [get_read_info(read)]
+def assemble_reads(bamfile,gene_to_stitch, cell_set = None):
+    readtrie = pygtrie.StringTrie()
+    bam = pysam.AlignmentFile(bamfile, 'rb')
+    gene_of_interest = gene_to_stitch['gene_id']
+    for read in bam.fetch(gene_to_stitch['seqid'], gene_to_stitch['start'], gene_to_stitch['end']):
+        cell = read.get_tag('BC')
+        if cell_set is not None:
+            if cell not in cell_set:
+                continue
+        umi = read.get_tag('UB')
+        if umi == '':
+            continue
+        if read.has_tag('GE'):
+            gene_exon = read.get_tag('GE')
+        else:
+            gene_exon = 'Unassigned'
+        if read.has_tag('GI'):
+            gene_intron = read.get_tag('GI')
+        else:
+            gene_intron = 'Unassigned'
+
+        # if it maps to the intron or exon of a gene
+        if gene_intron != 'Unassigned' or gene_exon != 'Unassigned':
+            # if it is a junction read
+            if gene_intron == gene_exon:
+                gene = gene_intron
+            # if it's an only intronic read
+            elif gene_intron != 'Unassigned' and gene_intron != gene_exon:
+                gene = gene_intron
+            # if it's an only exonic read
+            elif gene_exon != 'Unassigned' and gene_intron != gene_exon:
+                gene = gene_exon
+            # if the exon and intron gene tag contradict each other
             else:
-                read_dict[cell] = {}
-                read_dict[cell][gene] = {}
-                read_dict[cell][gene][umi] = [get_read_info(read)]
-            
-    return read_dict
+                print('contradiction')
+                continue
+        else:
+            continue
+        if read.is_paired and not read.is_unmapped and not read.mate_is_unmapped and gene == gene_of_interest \
+        and read.is_proper_pair:
+            node = '{}/{}/{}'.format(cell,gene,umi)
+            if readtrie.has_node(node):
+                readtrie[node].append(read)
+            else:
+                readtrie[node] = [read]
+    for node, mol in readtrie.iteritems():
+        info = node.split('/')
+        read_names = [r.query_name for r in mol]
+        if 2*len(set(read_names)) == len(mol):
+            stitch_reads(mol, None, info[0], info[1], info[2])
+        else:
+            q.put((False, '{} does not have all reads within the annotated gene'.format(node)))
+
+    return gene_of_interest
 
 
 def make_POS_and_CIGAR(stitched_m):
@@ -291,42 +288,60 @@ def yield_reads(read_dict):
                 #print('\t\t', umi)
                 yield read_dict[cell][gene][umi], None, cell, gene, umi
 
-def write_sam_file(stitched_mols, filename, bamfile):
-    with open(filename, 'w') as samfile:
-        # write header
-        samfile.write('@HD\tVN:1.0\tSO:unknown\n')
-        for SQ in bamfile.header['SQ']:
-            samfile.write('@SQ\tSN:{}\tLN:{}\n'.format(SQ['SN'],SQ['LN']))
-        samfile.write('@PG\tID:stitcher\tVN:0.1\n')
-        for mol in stitched_mols:
-            samfile.write(convert_to_sam(mol))
-        samfile.truncate()
-    return None
+
+def create_write_function(filename, bamfile, version):
+    bam = pysam.AlignmentFile(bamfile, 'rb')
+    header = bam.header['SQ']
+    def write_sam_file(q):
+        error_file = open('{}_error.log'.format(os.path.splitext(filename)[0]), 'w')
+        with open(filename, 'w') as samfile:
+            # write header
+            samfile.write('@HD\tVN:1.0\tSO:unknown\n')
+            for SQ in header:
+                samfile.write('@SQ\tSN:{}\tLN:{}\n'.format(SQ['SN'],SQ['LN']))
+            samfile.write('@PG\tID:stitcher\tVN:{}\n'.format(version))
+            while True:
+                good, mol = q.get()
+                if mol is None: break
+                if good:
+                    samfile.write(mol)
+                else:
+                    error_file.write(mol + '\n')
+                q.task_done()
+            samfile.truncate()
+            q.task_done()
+        error_file.close()
+        return None
+    return write_sam_file
 
 def extract(d, keys):
     return dict((k, d[k]) for k in keys if k in d)
 
-def construct_stitched_molecules(infile, outfile, cells, contig, threads):
-    print('Gathering reads for {}'.format(infile))
+def construct_stitched_molecules(infile, outfile, gtffile, cells, contig, threads, version):
+    print('Stitching reads for {}'.format(infile))
     start = time.time()
-    bamfile = pysam.AlignmentFile(infile, 'rb')
+
     if cells is not None:
-        cell_list = [line.rstrip() for line in open(cells)]
+        cell_set = set([line.rstrip() for line in open(cells)])
     else:
-        cell_list = None
-    read_dict = make_read_dict(bamfile, contig, read_dict={}, cell_list = cell_list)
-    end = time.time()
-    print('Finished gathering reads for {}, took {}'.format(infile, get_time_formatted(end-start)))
+        cell_set = None
 
-    print('Stitching reads into molecules for {}'.format(infile))
-    start = time.time()
-    stitched_mols = Parallel(n_jobs=threads, verbose = 3)(delayed(stitch_reads)(*d) for d in yield_reads(read_dict))
-    end = time.time()
-    print('Finished stitching reads into molecules for {}, took {}'.format(infile, get_time_formatted(end-start)))
+    gene_list = []
+    with open(gtffile, 'r') as f:
+        for line in f:
+            l = line.split('\t')
+            if l[2] == 'gene':
+                if contig is not None:
+                    if l[0] == contig:
+                        gene_list.append({'gene_id': l[8].split(' ')[1].replace('"', '').strip(';'), 'seqid':l[0], 'start':int(l[3]), 'end':int(l[4])})
+                    else:
+                        continue
+                else:
+                    gene_list.append({'gene_id': l[8].split(' ')[1].replace('"', '').strip(';'), 'seqid':l[0], 'start':int(l[3]), 'end':int(l[4])})
 
-    print('Writing stitched molecules from {} to {}'.format(infile, outfile))
-    start = time.time()
-    write_sam_file(stitched_mols, outfile, bamfile)
+
+    params = Parallel(n_jobs=10, verbose = 3, backend='multiprocessing')(delayed(assemble_reads)(infile, gene, cell_set) for gene in gene_list)
+
     end = time.time()
     print('Finished writing stitched molecules from {} to {}, took {}'.format(infile, outfile, get_time_formatted(end-start)))
     return None
@@ -335,12 +350,21 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Stitch together molecules from reads sharing the same UMI')
     parser.add_argument('--i',metavar='input', type=str, nargs=1, help='Input .bam file')
     parser.add_argument('--o', metavar='output', type=str, nargs=1, help='Output .sam file')
+    parser.add_argument('--g', metavar='gtf', type=str, nargs = 1, help='gtf file with gene information')
     parser.add_argument('--t', metavar='threads', type=int, nargs=1, default=[1], help='Number of threads')
     parser.add_argument('--cells', default=None, metavar='cells', type=str, nargs=1, help='List of cell barcodes to stitch molecules')
     parser.add_argument('--contig', default=None, metavar='contig', type=str, nargs=1, help='Restrict stitching to contig')
+    parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + __version__)
     args = parser.parse_args()
+    if args.i is None:
+        raise Exception('No input file provided.')
     infile = args.i[0]
+    if args.o is None:
+        raise Exception('No output file provided.')
     outfile = args.o[0]
+    if args.g is None:
+        raise Exception('No gtf file provided.')
+    gtffile = args.g[0]
     threads = int(args.t[0])
     if args.cells is None:
         cells = args.cells
@@ -350,4 +374,9 @@ if __name__ == '__main__':
         contig = args.contig
     else:
         contig = args.contig[0]
-    construct_stitched_molecules(infile, outfile, cells, contig, threads)
+    q = JoinableQueue()
+    p = Process(target=create_write_function(filename=outfile, bamfile=infile, version=__version__), args=(q,))
+    p.start()
+    construct_stitched_molecules(infile, outfile, gtffile, cells, contig, threads, __version__)
+    q.put((None,None))
+    p.join()
