@@ -11,7 +11,7 @@ import time
 import os
 from joblib import delayed,Parallel
 from multiprocessing import Process, JoinableQueue
-
+#os.system("taskset -p 0xff %d" % os.getpid())
 __version__ = '1.0'
 nucleotides = ['A', 'T', 'C', 'G']
 np.seterr(divide='ignore')
@@ -180,7 +180,7 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
     return True
 
 
-def assemble_reads(bamfile,gene_to_stitch, cell_set = None):
+def assemble_reads(bamfile,gene_to_stitch, cell_set):
     readtrie = pygtrie.StringTrie()
     bam = pysam.AlignmentFile(bamfile, 'rb')
     gene_of_interest = gene_to_stitch['gene_id']
