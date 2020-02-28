@@ -6,23 +6,23 @@ import pandas as pd
 import numpy as np
 import pygtrie
 from interval import interval
-import itertools 
+import itertools
+import pprofile
+profiler = pprofile.Profile()
 import sys
 import time
 import os
 from joblib import delayed,Parallel
 from multiprocessing import Process, JoinableQueue
-#os.system("taskset -p 0xff %d" % os.getpid())
 __version__ = '1.0'
 nucleotides = ['A', 'T', 'C', 'G']
+nuc_dict = {'A':0, 'T':1, 'C':2, 'G':3, 'N': 4}
 np.seterr(divide='ignore')
 
 def make_ll_array(e):
-    p=e[0]
-    i=e[1]
-    y = np.repeat(p/3, 4)
-    if i != 4:
-        y[i] = 1-p
+    y = np.array([e[0]/3,e[0]/3,e[0]/3,e[0]/3])
+    if e[1] != 4:
+        y[e[1]] = 1-e[0]
     return np.log10(y)
 
 
@@ -95,6 +95,8 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
     read_starts = [0]*nreads
     exonic_list = [0]*nreads
     intronic_list = [0]*nreads
+    seq_series_list = []
+    qual_series_list = []
     for i,read in enumerate(read_d):
         if read.has_tag('GE'):
             exonic = True
@@ -105,17 +107,15 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
         else:
             intronic = False
         p_x = 10**(-np.float_(np.array(read.query_alignment_qualities))/10)
-        seq = [char for char in read.query_alignment_sequence]
+        seq = [nuc_dict[c] for c in read.query_alignment_sequence]
         cigtuples = read.cigartuples
         insertion_locs = get_insertions_locs(cigtuples)
         for loc in insertion_locs:
                 del seq[loc]
                 del p_x[loc]
         ref_positions = read.get_reference_positions()
-        try:
-            skipped_intervals = get_skipped_tuples(cigtuples, ref_positions)
-        except IndexError:
-            print(read)
+        skipped_intervals = get_skipped_tuples(cigtuples, ref_positions)
+
         if mol_dict is None:
             if read.is_read1:
                 reverse_read1[i] = read.is_reverse
@@ -133,25 +133,23 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
         intronic_list[i] = intronic
         seq_series = pd.Series(seq, index=ref_positions)
         seq_series.name = read.query_name
+        seq_series_list.append(seq_series)
         qual_series = pd.Series(p_x, index=ref_positions)
         qual_series.name = read.query_name
-        if seq_df is None:
-            seq_df = pd.DataFrame(seq_series)
-            qual_df = pd.DataFrame(qual_series)
-        else:
-            seq_df = seq_df.join(seq_series,how='outer', rsuffix = '_right')
-            qual_df = qual_df.join(qual_series,how='outer', rsuffix = '_right')
+        qual_series_list.append(qual_series)
         if len(master_read) == 0:
             master_read['skipped_intervals'] = skipped_intervals
         else:
             master_read['skipped_intervals'].extend(skipped_intervals)
     master_read['SN'] = read.reference_name
-    qual_df = qual_df.replace(np.nan, 3)
-    seq_df = seq_df.replace(['A','T', 'C', 'G', np.nan, 'N'],[0,1,2,3,4,4])
-    merged_df = pd.DataFrame(np.rec.fromarrays((qual_df.values, seq_df.values)).tolist(), 
+    qual_df = pd.DataFrame(qual_series_list).fillna(3).transpose()
+    seq_df = pd.DataFrame(seq_series_list).fillna(4).astype(int).transpose()
+    merged_df = pd.DataFrame(np.rec.fromarrays((qual_df.values, seq_df.values)).tolist(),
                       columns=qual_df.columns,
                       index=qual_df.index)
+
     qual_probs = 10**(merged_df.applymap(make_ll_array).apply(lambda x: np.concatenate(list(x))).sum(axis=1)).values.reshape(qual_df.shape[0], 4)
+
     normed_probs = qual_probs/qual_probs.sum(axis=1)[:, np.newaxis]
     prob_max = np.max(normed_probs, axis=1)
     master_read['seq'] = ''.join([nucleotides[x] if p > 0.3 else 'N' for p, x in zip(prob_max, np.argmax(normed_probs, axis=1))])
@@ -228,7 +226,8 @@ def assemble_reads(bamfile,gene_to_stitch, cell_set):
         info = node.split('/')
         read_names = [r.query_name for r in mol]
         if 2*len(set(read_names)) == len(mol):
-            stitch_reads(mol, None, info[0], info[1], info[2])
+             stitch_reads(mol, None, info[0], info[1], info[2])
+#            profiler.dump_stats('profiler/profiler_stats_{}.txt'.format(node.replace('/','_')))
         else:
             q.put((False, '{} does not have all reads within the annotated gene'.format(node)))
 
