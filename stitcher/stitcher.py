@@ -228,7 +228,7 @@ def assemble_reads(bamfile,gene_to_stitch, cell_set):
         info = node.split('/')
         read_names = [r.query_name for r in mol]
         if 2*len(set(read_names)) == len(mol):
-                stitch_reads(mol, None, info[0], info[1], info[2])
+            stitch_reads(mol, None, info[0], info[1], info[2])
         else:
             q.put((False, '{} does not have all reads within the annotated gene'.format(node)))
 
