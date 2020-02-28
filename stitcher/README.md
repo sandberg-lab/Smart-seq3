@@ -1,6 +1,6 @@
 # stitcher.py
 
-_stitcher.py_ reconstructs molecules from Smart-seq3 data processed with zUMIs => 2.6.0 [https://github.com/sdparekh/zUMIs] and outputs a .sam file which can be used for further analysis.
+_stitcher.py_ reconstructs molecules from Smart-seq3 data processed with zUMIs => 2.6.0 https://github.com/sdparekh/zUMIs and outputs a .sam file which can be used for further analysis.
 
 ## System Requirements for stitcher
 
