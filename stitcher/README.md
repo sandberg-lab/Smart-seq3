@@ -20,7 +20,7 @@ No further installation is needed.
 stitcher.py [-h] [--i input] [--o output] [--g gtf] [--t threads]
                    [--cells cells] [--contig contig] [-v]
 
-Stitch together molecules from reads sharing the same UMI
+Stitch together molecules from reads sharing the same UMI.
 
 **arguments:**
 ```
