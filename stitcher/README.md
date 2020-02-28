@@ -17,12 +17,13 @@ No further installation is needed.
 
 ## Usage
 
-usage: stitcher.py [-h] [--i input] [--o output] [--g gtf] [--t threads]
+stitcher.py [-h] [--i input] [--o output] [--g gtf] [--t threads]
                    [--cells cells] [--contig contig] [-v]
 
 Stitch together molecules from reads sharing the same UMI
 
 **arguments:**
+```
   -h, --help       show this help message and exit
   
   --i input        Input .bam file
@@ -38,7 +39,7 @@ Stitch together molecules from reads sharing the same UMI
   --contig contig  Restrict stitching to contig
   
   -v, --version    show program's version number and exit
-
+```
 
 
 ## Output 
