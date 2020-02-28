@@ -163,9 +163,9 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
     else:
         master_read['is_reverse'] = mol_dict[cell][gene][umi].is_reverse
     if master_read['is_reverse']:
-        master_read['ends'] = list(set(read_starts))
+        master_read['ends'] = list(set(read_starts)-{0})
     else:
-        master_read['ends'] = list(set(read_ends))
+        master_read['ends'] = list(set(read_ends)-{0})
     master_read['ref_intervals'] = interval(*intervals_extract(seq_df.index.values))
     master_read['skipped_intervals'] = interval(*list(set(master_read['skipped_intervals'])))
     master_read['del_intervals'] =  get_del_tuples(master_read['ref_intervals'] | master_read['skipped_intervals'])
