@@ -27,7 +27,6 @@ def make_ll_array(e):
 
 
 def intervals_extract(iterable): 
-      
     iterable = sorted(set(iterable)) 
     for key, group in itertools.groupby(enumerate(iterable), 
     lambda t: t[1] - t[0]): 
@@ -251,9 +250,6 @@ def make_POS_and_CIGAR(stitched_m):
     del_tuples = stitched_m['del_intervals']
     POS = ref_tuples[0][0] + 1
     tuple_dict = {'M': ref_tuples, 'N': skipped_tuples, 'D': del_tuples}
-    conflict = len() > 0
-    if conflict:
-        return POS, '*', conflict
     l = []
     while sum(len(t) for t in tuple_dict.values()) > 0:
         pos_dict = {k:v[0][0] for k,v in tuple_dict.items() if len(v) > 0}
@@ -271,7 +267,7 @@ def convert_to_sam(stitched_m):
     sam_dict = {}
     POS, CIGAR, conflict, nreads_conflict, interval_list = make_POS_and_CIGAR(stitched_m)
     sam_dict['QNAME'] = '{}:{}:{}'.format(stitched_m['cell'],stitched_m['gene'],stitched_m['umi'])
-    sam_dict['FLAG'] = str(16*stitched_m['is_reverse']+4*conflict)
+    sam_dict['FLAG'] = str(16*stitched_m['is_reverse'])
     sam_dict['RNAME'] = stitched_m['SN']
     sam_dict['POS'] = str(POS)
     sam_dict['MAPQ'] = str(255)
