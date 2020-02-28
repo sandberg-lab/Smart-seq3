@@ -24,12 +24,19 @@ Stitch together molecules from reads sharing the same UMI
 
 **arguments:**
   -h, --help       show this help message and exit
+  
   --i input        Input .bam file
+  
   --o output       Output .sam file
+  
   --g gtf          gtf file with gene information
+  
   --t threads      Number of threads
+  
   --cells cells    List of cell barcodes to stitch molecules (text file, one cell barcode per line).
+  
   --contig contig  Restrict stitching to contig
+  
   -v, --version    show program's version number and exit
 
 
