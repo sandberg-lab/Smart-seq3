@@ -7,8 +7,8 @@ import numpy as np
 import pygtrie
 from interval import interval
 import itertools
-import pprofile
-profiler = pprofile.Profile()
+#import pprofile
+#profiler = pprofile.Profile()
 import sys
 import time
 import os
