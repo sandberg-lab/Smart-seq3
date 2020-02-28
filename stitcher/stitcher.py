@@ -89,12 +89,13 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
     master_read = {}
     seq_df = None
     qual_df = None
-    reverse_read1 = []
-    read_ends = []
-    read_starts = []
-    exonic_list = []
-    intronic_list = []
-    for read in read_d:
+    nreads = len(read_d)
+    reverse_read1 = [0]*nreads
+    read_ends = [0]*nreads
+    read_starts = [0]*nreads
+    exonic_list = [0]*nreads
+    intronic_list = [0]*nreads
+    for i,read in enumerate(read_d):
         if read.has_tag('GE'):
             exonic = True
         else:
@@ -103,7 +104,7 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
             intronic = True
         else:
             intronic = False
-        p_x = list(10**(-np.float_(np.array(read.query_alignment_qualities))/10))
+        p_x = 10**(-np.float_(np.array(read.query_alignment_qualities))/10)
         seq = [char for char in read.query_alignment_sequence]
         cigtuples = read.cigartuples
         insertion_locs = get_insertions_locs(cigtuples)
@@ -117,19 +118,19 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
             print(read)
         if mol_dict is None:
             if read.is_read1:
-                reverse_read1.append(read.is_reverse)
+                reverse_read1[i] = read.is_reverse
             else:
-                read_starts.append(read.reference_start)
-                read_ends.append(read.reference_end)
+                read_starts[i] = read.reference_start
+                read_ends[i] = read.reference_end
         else:
             if mol_dict[cell][gene][umi].is_reverse:
                 if not read.is_reverse:
-                    read_starts.append(read.reference_start)
+                    read_starts[i] = read.reference_start
             else:
                 if read.is_reverse:
-                    read_ends.append(read.reference_end)
-        exonic_list.append(exonic)
-        intronic_list.append(intronic)
+                    read_ends[i] = read.reference_end
+        exonic_list[i] = exonic
+        intronic_list[i] = intronic
         seq_series = pd.Series(seq, index=ref_positions)
         seq_series.name = read.query_name
         qual_series = pd.Series(p_x, index=ref_positions)
@@ -168,11 +169,9 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
     master_read['ref_intervals'] = get_ref_intervals(seq_df.index)
     ref_skip_union = (master_read['ref_intervals'] | master_read['skipped_intervals'])
     master_read['del_intervals'] =  get_del_intervals(ref_skip_union)
-    master_read['NR'] = len(read_d)
-    master_read['IR'] = sum(intronic_list)
-    master_read['ER'] = sum(exonic_list)
-    master_read['intronic_reads'] = sum(intronic_list)
-    master_read['exonic_reads'] = sum(exonic_list)
+    master_read['NR'] = nreads
+    master_read['IR'] = np.sum(intronic_list)
+    master_read['ER'] = np.sum(exonic_list)
     master_read['cell'] = cell
     master_read['gene'] = gene
     master_read['umi'] = umi
@@ -229,7 +228,7 @@ def assemble_reads(bamfile,gene_to_stitch, cell_set):
         info = node.split('/')
         read_names = [r.query_name for r in mol]
         if 2*len(set(read_names)) == len(mol):
-            stitch_reads(mol, None, info[0], info[1], info[2])
+                stitch_reads(mol, None, info[0], info[1], info[2])
         else:
             q.put((False, '{} does not have all reads within the annotated gene'.format(node)))
 
@@ -341,7 +340,6 @@ def construct_stitched_molecules(infile, outfile, gtffile, cells, contig, thread
                         continue
                 else:
                     gene_list.append({'gene_id': l[8].split(' ')[1].replace('"', '').strip(';'), 'seqid':l[0], 'start':int(l[3]), 'end':int(l[4])})
-
 
     params = Parallel(n_jobs=threads, verbose = 3, backend='multiprocessing')(delayed(assemble_reads)(infile, gene, cell_set) for gene in gene_list)
 
