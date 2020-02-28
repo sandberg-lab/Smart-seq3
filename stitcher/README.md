@@ -2,7 +2,7 @@
 
 _stitcher.py_ reconstructs molecules from Smart-seq3 data processed with zUMIs => 2.6.0 https://github.com/sdparekh/zUMIs and outputs a .sam file which can be used for further analysis.
 
-## System Requirements for stitcher
+## System Requirements for stitcher.py
 
 _stitcher.py_  is a python3 script with dependencies:
 ```
@@ -52,7 +52,7 @@ NC : If there is a conflict in the reconstruction, the number of conflicting int
 IL : IF there is a conflict in the reconstruction, the intervals where there is a conflict.
 ```
 
-#### Example 
+## Example 
 
 ```
 python3 stitcher.py --i smartseq3_file.bam --o smartseq3_molecules.sam --g Mus_musculus.GRCm38.91.chr.clean.gtf --t 10 --contig chr1 --cells cells.txt
