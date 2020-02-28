@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import pygtrie
 from interval import interval
+import itertools 
 import sys
 import time
 import os
@@ -23,6 +24,16 @@ def make_ll_array(e):
     if i != 4:
         y[i] = 1-p
     return np.log10(y)
+
+
+def intervals_extract(iterable): 
+      
+    iterable = sorted(set(iterable)) 
+    for key, group in itertools.groupby(enumerate(iterable), 
+    lambda t: t[1] - t[0]): 
+        group = list(group) 
+        yield [group[0][1], group[-1][1]] 
+
 
 def get_time_formatted(time):
     day = time // (24 * 3600)
@@ -52,38 +63,28 @@ def get_insertions_locs(cigtuples):
                 l += 1
     return insertion_locs
 
-def get_skipped_intervals(cigtuples, ref_positions):
-    skipped_locs = interval()
+def get_skipped_tuples(cigtuples, ref_positions):
+    skipped_locs = []
     l = 0
     for c in cigtuples:
         if c[0] == 0:
             l += c[1]
         elif c[0] == 3:
-            skipped_locs = skipped_locs | interval[ref_positions[l-1]+1, ref_positions[l]-1]
+            skipped_locs.append((ref_positions[l-1]+1, ref_positions[l]-1))
     return skipped_locs
 
-def get_ref_intervals(ref_positions):
-    ref_intervals = interval[ref_positions[0], ref_positions[1]] 
-    for i in range(len(ref_positions)-2):
-        if (ref_positions[i+2] - ref_positions[i+1]) == 1:
-            ref_intervals = ref_intervals | interval[ref_positions[i+1],ref_positions[i+2]]
-    return ref_intervals
-
-def get_del_intervals(ref_skip_union):
+def get_del_tuples(ref_skip_union):
     prev_interval = None
-    del_intervals = interval()
+    del_intervals = []
     for x in ref_skip_union:
         if prev_interval is not None:
             if prev_interval[1] + 1 == x[0]:
                 prev_interval = x
                 continue
             else:
-                del_intervals = del_intervals | interval[prev_interval[1]+1, x[0]-1]
-            prev_interval = x
-        else:
-            prev_interval = x
+                del_intervals.append((prev_interval[1]+1, x[0]-1))
+        prev_interval = x
     return del_intervals
-
 
 def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
     master_read = {}
@@ -113,7 +114,7 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
                 del p_x[loc]
         ref_positions = read.get_reference_positions()
         try:
-            skipped_intervals = get_skipped_intervals(cigtuples, ref_positions)
+            skipped_intervals = get_skipped_tuples(cigtuples, ref_positions)
         except IndexError:
             print(read)
         if mol_dict is None:
@@ -144,7 +145,7 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
         if len(master_read) == 0:
             master_read['skipped_intervals'] = skipped_intervals
         else:
-            master_read['skipped_intervals'] = master_read['skipped_intervals'] | skipped_intervals
+            master_read['skipped_intervals'].extend(skipped_intervals)
     master_read['SN'] = read.reference_name
     qual_df = qual_df.replace(np.nan, 3)
     seq_df = seq_df.replace(['A','T', 'C', 'G', np.nan, 'N'],[0,1,2,3,4,4])
@@ -166,9 +167,9 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
         master_read['ends'] = list(set(read_starts))
     else:
         master_read['ends'] = list(set(read_ends))
-    master_read['ref_intervals'] = get_ref_intervals(seq_df.index)
-    ref_skip_union = (master_read['ref_intervals'] | master_read['skipped_intervals'])
-    master_read['del_intervals'] =  get_del_intervals(ref_skip_union)
+    master_read['ref_intervals'] = interval(*intervals_extract(seq_df.index.values))
+    master_read['skipped_intervals'] = interval(*list(set(master_read['skipped_intervals'])))
+    master_read['del_intervals'] =  get_del_tuples(master_read['ref_intervals'] | master_read['skipped_intervals'])
     master_read['NR'] = nreads
     master_read['IR'] = np.sum(intronic_list)
     master_read['ER'] = np.sum(exonic_list)
@@ -237,12 +238,20 @@ def assemble_reads(bamfile,gene_to_stitch, cell_set):
 
 def make_POS_and_CIGAR(stitched_m):
     CIGAR = ''
+    conflict = False
+    interval_list = []
+    ref_and_skip_intersect = stitched_m['ref_intervals'] & stitched_m['skipped_intervals']
+    nreads_conflict = len(ref_and_skip_intersect)
+    if nreads_conflict > 0:
+        conflict = True
+        stitched_m['skipped_intervals'] = stitched_m['skipped_intervals'] - ref_and_skip_intersect
+        interval_list = [int(i) for t in ref_and_skip_intersect for i in t]
     ref_tuples = [(int(i.inf),int(i.sup)) for i in stitched_m['ref_intervals']]
     skipped_tuples = [(int(i.inf),int(i.sup)) for i in stitched_m['skipped_intervals']]
-    del_tuples = [(int(i.inf),int(i.sup)) for i in stitched_m['del_intervals']]
+    del_tuples = stitched_m['del_intervals']
     POS = ref_tuples[0][0] + 1
     tuple_dict = {'M': ref_tuples, 'N': skipped_tuples, 'D': del_tuples}
-    conflict = len(stitched_m['ref_intervals'] & stitched_m['skipped_intervals']) > 0
+    conflict = len() > 0
     if conflict:
         return POS, '*', conflict
     l = []
@@ -257,11 +266,10 @@ def make_POS_and_CIGAR(stitched_m):
     conflict = sum(l) != len(stitched_m['seq'])
     if conflict:
         CIGAR = '*'
-    return POS, CIGAR, sum(l) != len(stitched_m['seq'])
-
+    return POS, CIGAR, conflict, nreads_conflict, interval_list
 def convert_to_sam(stitched_m):
     sam_dict = {}
-    POS, CIGAR, conflict = make_POS_and_CIGAR(stitched_m)
+    POS, CIGAR, conflict, nreads_conflict, interval_list = make_POS_and_CIGAR(stitched_m)
     sam_dict['QNAME'] = '{}:{}:{}'.format(stitched_m['cell'],stitched_m['gene'],stitched_m['umi'])
     sam_dict['FLAG'] = str(16*stitched_m['is_reverse']+4*conflict)
     sam_dict['RNAME'] = stitched_m['SN']
@@ -280,6 +288,9 @@ def convert_to_sam(stitched_m):
     sam_dict['XT'] = 'XT:Z:{}'.format(stitched_m['gene'])
     sam_dict['UB'] = 'UB:Z:{}'.format(stitched_m['umi'])
     sam_dict['EL'] = 'EL:B:I,{}'.format(','.join([str(e) for e in stitched_m['ends']]))
+    if conflict:
+        sam_dict['NC'] = 'NC:i:{}'.format(nreads_conflict)
+        sam_dict['IL'] = 'IL:B:I,{}'.format(','.join([str(e) for e in interval_list]))
     return '\t'.join(list(sam_dict.values())) + '\n'
 
 def yield_reads(read_dict):
