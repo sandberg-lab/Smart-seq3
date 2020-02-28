@@ -49,7 +49,7 @@ XT : Gene barcode (same as ZUMIs < 2.6.0).
 UB : UMI (same as zUMIs).
 EL : Locations of read ends (strand dependent).
 NC : If there is a conflict in the reconstruction, the number of conflicting intervals.
-IL : IF there is a conflict in the reconstruction, the intervals where there is a conflict.
+IL : If there is a conflict in the reconstruction, the intervals where there is a conflict.
 ```
 
 ## Example 
