@@ -275,7 +275,7 @@ def convert_to_sam(stitched_m):
     sam_dict['PNEXT'] = str(0)
     sam_dict['TLEN'] = str(0)
     sam_dict['SEQ'] = stitched_m['seq']
-    sam_dict['QUAL'] = "".join([chr(int(p)) for p in np.clip(stitched_m['phred'],0,126-33)+33])
+    sam_dict['QUAL'] = "".join([chr(int(p)) if not np.isnan(p) else chr(33) for p in np.clip(stitched_m['phred'],0,126-33)+33])
     sam_dict['NR'] = 'NR:i:{}'.format(stitched_m['NR'])
     sam_dict['ER'] = 'ER:i:{}'.format(stitched_m['ER'])
     sam_dict['IR'] = 'IR:i:{}'.format(stitched_m['IR'])
