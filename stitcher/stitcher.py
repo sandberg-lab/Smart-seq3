@@ -153,7 +153,7 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
     normed_probs = qual_probs/qual_probs.sum(axis=1)[:, np.newaxis]
     prob_max = np.max(normed_probs, axis=1)
     master_read['seq'] = ''.join([nucleotides[x] if p > 0.3 else 'N' for p, x in zip(prob_max, np.argmax(normed_probs, axis=1))])
-    master_read['phred'] = np.rint(-10*np.log10(1-prob_max+1e-13))
+    master_read['phred'] = np.nan_to_num(np.rint(-10*np.log10(1-prob_max+1e-13)))
     if mol_dict is None:
         v, c = np.unique(reverse_read1, return_counts=True)
         m = c.argmax()
@@ -275,7 +275,7 @@ def convert_to_sam(stitched_m):
     sam_dict['PNEXT'] = str(0)
     sam_dict['TLEN'] = str(0)
     sam_dict['SEQ'] = stitched_m['seq']
-    sam_dict['QUAL'] = "".join([chr(int(p)) if not np.isnan(p) else chr(33) for p in np.clip(stitched_m['phred'],0,126-33)+33])
+    sam_dict['QUAL'] = "".join([chr(int(p)) for p in np.clip(stitched_m['phred'],0,126-33)+33])
     sam_dict['NR'] = 'NR:i:{}'.format(stitched_m['NR'])
     sam_dict['ER'] = 'ER:i:{}'.format(stitched_m['ER'])
     sam_dict['IR'] = 'IR:i:{}'.format(stitched_m['IR'])
