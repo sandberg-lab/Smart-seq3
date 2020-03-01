@@ -7,8 +7,6 @@ import numpy as np
 import pygtrie
 from interval import interval
 import itertools
-#import pprofile
-#profiler = pprofile.Profile()
 import sys
 import time
 import os
@@ -227,7 +225,6 @@ def assemble_reads(bamfile,gene_to_stitch, cell_set):
         read_names = [r.query_name for r in mol]
         if 2*len(set(read_names)) == len(mol):
              stitch_reads(mol, None, info[0], info[1], info[2])
-#            profiler.dump_stats('profiler/profiler_stats_{}.txt'.format(node.replace('/','_')))
         else:
             q.put((False, '{} does not have all reads within the annotated gene'.format(node)))
 
