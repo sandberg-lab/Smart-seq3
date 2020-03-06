@@ -104,7 +104,7 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
             intronic = True
         else:
             intronic = False
-        p_x = 10**(-np.float_(np.array(read.query_alignment_qualities))/10)
+        p_x = list(10**(-np.float_(np.array(read.query_alignment_qualities))/10))
         seq = [nuc_dict[c] for c in read.query_alignment_sequence]
         cigtuples = read.cigartuples
         insertion_locs = get_insertions_locs(cigtuples)
