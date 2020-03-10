@@ -108,9 +108,13 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
         seq = [nuc_dict[c] for c in read.query_alignment_sequence]
         cigtuples = read.cigartuples
         insertion_locs = get_insertions_locs(cigtuples)
-        for loc in insertion_locs:
-                del seq[loc]
-                del p_x[loc]
+        try:
+            for loc in insertion_locs:
+                    del seq[loc]
+                    del p_x[loc]
+        except IndexError:
+            q.put((False, read.query_name))
+            continue
         ref_positions = read.get_reference_positions()
         skipped_intervals = get_skipped_tuples(cigtuples, ref_positions)
 
@@ -335,6 +339,8 @@ def construct_stitched_molecules(infile, outfile, gtffile, cells, contig, thread
     with open(gtffile, 'r') as f:
         for line in f:
             l = line.split('\t')
+            if len(l) < 8:
+                continue
             if l[2] == 'gene':
                 if contig is not None:
                     if l[0] == contig:
