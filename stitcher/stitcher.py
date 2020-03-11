@@ -327,8 +327,7 @@ def extract(d, keys):
     return dict((k, d[k]) for k in keys if k in d)
 
 def construct_stitched_molecules(infile, outfile, gtffile, cells, contig, threads, version):
-    print('Stitching reads for {}'.format(infile))
-    start = time.time()
+
 
     if cells is not None:
         cell_set = set([line.rstrip() for line in open(cells)])
@@ -352,8 +351,7 @@ def construct_stitched_molecules(infile, outfile, gtffile, cells, contig, thread
 
     params = Parallel(n_jobs=threads, verbose = 3, backend='multiprocessing')(delayed(assemble_reads)(infile, gene, cell_set) for gene in gene_list)
 
-    end = time.time()
-    print('Finished writing stitched molecules from {} to {}, took {}'.format(infile, outfile, get_time_formatted(end-start)))
+
     return None
 
 if __name__ == '__main__':
@@ -387,6 +385,10 @@ if __name__ == '__main__':
     q = JoinableQueue()
     p = Process(target=create_write_function(filename=outfile, bamfile=infile, version=__version__), args=(q,))
     p.start()
+    print('Stitching reads for {}'.format(infile))
+    start = time.time()
     construct_stitched_molecules(infile, outfile, gtffile, cells, contig, threads, __version__)
     q.put((None,None))
     p.join()
+    end = time.time()
+    print('Finished writing stitched molecules from {} to {}, took {}'.format(infile, outfile, get_time_formatted(end-start)))
