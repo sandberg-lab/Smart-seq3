@@ -11,14 +11,15 @@ numpy
 pysam
 joblib
 pygtrie
-pyinterval
+portion
+rpy2
 ```
 No further installation is needed.
 
 ## Usage
 
-stitcher.py [-h] [--i input] [--o output] [--g gtf] [--t threads]
-                   [--cells cells] [--contig contig] [-v]
+stitcher.py [-h] [--i input] [--o output] [--g gtf] [--counts counts] 
+            [--t threads] [--cells cells] [--contig contig] [v]
 
 **arguments:**
 ```
@@ -26,12 +27,17 @@ stitcher.py [-h] [--i input] [--o output] [--g gtf] [--t threads]
   --i input        Input .bam file
   --o output       Output .sam file
   --g gtf          gtf file with gene information
+  --counts counts  zUMIs .rds file with read counts 
   --t threads      Number of threads
   --cells cells    List of cell barcodes to stitch molecules (text file, one cell barcode per line).
   --contig contig  Restrict stitching to contig
   -v, --version    show program's version number and exit
 ```
+## Input
 
+_stitcher.py_ takes .bam file processed with zUMIs => 2.6.0, together with a gtf file and the zUMIs .rds expression file, to reconstruct molecules for the genes in the gtf file.
+
+As optional parameter, the user can specify the number of threads used for parallelization, the cells to process, and restrict the reconstruction to a given contig.
 
 ## Output 
 

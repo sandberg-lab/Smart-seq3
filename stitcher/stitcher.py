@@ -175,7 +175,7 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
         master_read['ends'] = list(set(read_ends)-{0})
     master_read['ref_intervals'] = interval(intervals_extract(seq_df.index.values))
     master_read['skipped_intervals'] = interval(list(set(master_read['skipped_intervals'])))
-    master_read['del_intervals'] =  ~(master_read['ref_intervals'] | master_read['skipped_intervals'])[1:-1]
+    master_read['del_intervals'] =  ~(master_read['ref_intervals'] | master_read['skipped_intervals'])
     master_read['NR'] = nreads
     master_read['IR'] = np.sum(intronic_list)
     master_read['ER'] = np.sum(exonic_list)
@@ -246,14 +246,21 @@ def make_POS_and_CIGAR(stitched_m):
     conflict = False
     interval_list = []
     ref_and_skip_intersect = stitched_m['ref_intervals'] & stitched_m['skipped_intervals']
-    nreads_conflict = len(ref_and_skip_intersect)
-    if nreads_conflict > 0:
+    nreads_conflict = 0
+    if not ref_and_skip_intersect.empty:
         conflict = True
+        nreads_conflict = len(list(P.iterate(ref_and_skip_intersect, step=1))) 
         stitched_m['skipped_intervals'] = stitched_m['skipped_intervals'] - ref_and_skip_intersect
         interval_list = [i for t in ref_and_skip_intersect for i in t[1:-1]]
     ref_tuples = [(i[1] if i[0] else i[1]+1, i[2] if i[3] else i[2]-1) for i in P.to_data(stitched_m['ref_intervals'])]
-    skipped_tuples = [(i[1] if i[0] else i[1]+1, i[2] if i[3] else i[2]-1) for i in P.to_data(stitched_m['skipped_intervals'])]
-    del_tuples = [(i[1] if i[0] else i[1]+1, i[2] if i[3] else i[2]-1) for i in P.to_data(stitched_m['del_intervals'])]
+    if stitched_m['skipped_intervals'].empty:
+        skipped_tuples = []
+    else:
+        skipped_tuples = [(i[1] if i[0] else i[1]+1, i[2] if i[3] else i[2]-1) for i in P.to_data(stitched_m['skipped_intervals'])]
+    if stitched_m['del_intervals'].empty:
+        del_tuples = []
+    else:
+        del_tuples = [(i[1] if i[0] else i[1]+1, i[2] if i[3] else i[2]-1) for i in P.to_data(stitched_m['del_intervals'])[1:-1]]
     POS = ref_tuples[0][0] + 1
     tuple_dict = {'M': ref_tuples, 'N': skipped_tuples, 'D': del_tuples}
     l = []
@@ -329,7 +336,7 @@ def create_write_function(filename, bamfile, version):
 def extract(d, keys):
     return dict((k, d[k]) for k in keys if k in d)
 
-def construct_stitched_molecules(infile, outfile,counts,gtffile, cells, contig, threads, version):
+def construct_stitched_molecules(infile, outfile,gtffile,counts, cells, contig, threads, version):
 
 
     if cells is not None:
@@ -365,9 +372,7 @@ def construct_stitched_molecules(infile, outfile,counts,gtffile, cells, contig, 
             zd[key]['inex'] = dict(zip(zd[key]['inex'].names, list(zd[key]['inex'])))
             zd[key]['inex']['all'] = rsparse2pandas.to_df(zd[key]['inex']['all'])
 
-        total_expr = robjects.r['rowSums'](zd['readcount']['inex']['all'])
-        v = robjects.r['sort'](total_expr)
-        total_counts = pd.Series(robjects.numpy2ri.ri2py(v), index=robjects.numpy2ri.ri2py(v.names))
+        total_counts = zd['readcount']['inex']['all'].sum(axis=1).sort_values(ascending=False)
         total_counts.name = 'total_counts'
         
         gene_df = gene_df.join(total_counts).fillna(0).sort_values('total_counts', ascending=False)
