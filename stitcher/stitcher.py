@@ -5,7 +5,7 @@ import pysam
 import pandas as pd
 import numpy as np
 import pygtrie
-from interval import interval
+import portion as P
 import itertools
 import sys
 import time
@@ -36,6 +36,8 @@ def intervals_extract(iterable):
         group = list(group) 
         yield [group[0][1], group[-1][1]] 
 
+def interval(t):
+    return P.from_data([(True,i[0],i[1], True) for i in t])
 
 def get_time_formatted(time):
     day = time // (24 * 3600)
@@ -171,9 +173,9 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
         master_read['ends'] = list(set(read_starts)-{0})
     else:
         master_read['ends'] = list(set(read_ends)-{0})
-    master_read['ref_intervals'] = interval(*intervals_extract(seq_df.index.values))
-    master_read['skipped_intervals'] = interval(*list(set(master_read['skipped_intervals'])))
-    master_read['del_intervals'] =  get_del_tuples(master_read['ref_intervals'] | master_read['skipped_intervals'])
+    master_read['ref_intervals'] = interval(intervals_extract(seq_df.index.values))
+    master_read['skipped_intervals'] = interval(list(set(master_read['skipped_intervals'])))
+    master_read['del_intervals'] =  ~(master_read['ref_intervals'] | master_read['skipped_intervals'])[1:-1]
     master_read['NR'] = nreads
     master_read['IR'] = np.sum(intronic_list)
     master_read['ER'] = np.sum(exonic_list)
@@ -248,10 +250,10 @@ def make_POS_and_CIGAR(stitched_m):
     if nreads_conflict > 0:
         conflict = True
         stitched_m['skipped_intervals'] = stitched_m['skipped_intervals'] - ref_and_skip_intersect
-        interval_list = [int(i) for t in ref_and_skip_intersect for i in t]
-    ref_tuples = [(int(i.inf),int(i.sup)) for i in stitched_m['ref_intervals']]
-    skipped_tuples = [(int(i.inf),int(i.sup)) for i in stitched_m['skipped_intervals']]
-    del_tuples = stitched_m['del_intervals']
+        interval_list = [i for t in ref_and_skip_intersect for i in t[1:-1]]
+    ref_tuples = [(i[1] if i[0] else i[1]+1, i[2] if i[3] else i[2]-1) for i in P.to_data(stitched_m['ref_intervals'])]
+    skipped_tuples = [(i[1] if i[0] else i[1]+1, i[2] if i[3] else i[2]-1) for i in P.to_data(stitched_m['skipped_intervals'])]
+    del_tuples = [(i[1] if i[0] else i[1]+1, i[2] if i[3] else i[2]-1) for i in P.to_data(stitched_m['del_intervals'])]
     POS = ref_tuples[0][0] + 1
     tuple_dict = {'M': ref_tuples, 'N': skipped_tuples, 'D': del_tuples}
     l = []
