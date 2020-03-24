@@ -251,7 +251,7 @@ def make_POS_and_CIGAR(stitched_m):
         conflict = True
         nreads_conflict = len(list(P.iterate(ref_and_skip_intersect, step=1))) 
         stitched_m['skipped_intervals'] = stitched_m['skipped_intervals'] - ref_and_skip_intersect
-        interval_list = [i for t in ref_and_skip_intersect for i in t[1:-1]]
+        interval_list = [i for t in P.to_data(ref_and_skip_intersect) for i in t[1:-1]]
     ref_tuples = [(i[1] if i[0] else i[1]+1, i[2] if i[3] else i[2]-1) for i in P.to_data(stitched_m['ref_intervals'])]
     if stitched_m['skipped_intervals'].empty:
         skipped_tuples = []
