@@ -43,7 +43,7 @@ As optional parameter, the user can specify the number of threads used for paral
 
 _stitcher.py_ writes its results to a .sam file as the reads are being processed. Some of the fields have a slightly different interpretation than usual. The algorithm does not handle insertions at the moment, and remove those before stitching the molecule. The query name is in the format "cell:gene:umi". The D character in the CIGAR string indicates missing coverage. The MAPQ is always 255. 
 
-In some cases the UMI reads contain conflicting information regarding the splicing of the molecule. This could either be due to differences in mapping or due to UMI collisions. In those cases, _stitcher.py_ prefer the unspliced option and writes two additional tags which contain the number of intervals which have conflicting information and the intervals themselves. 
+In some cases the UMI reads contain conflicting information regarding the splicing of the molecule. This could either be due to differences in mapping or due to UMI collisions. In those cases, _stitcher.py_ prefer the unspliced option and writes two additional tags which contain the number of bases which have conflicting information and the intervals themselves. 
 
 The .sam file contain many additional custom tags:
 
