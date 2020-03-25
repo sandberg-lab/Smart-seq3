@@ -52,7 +52,7 @@ NR : Number of reads used to stitch.
 ER : Number of reads covering an exon.
 IR : Number of reads covering an intron.
 BC : Cell barcode (same as zUMIs).
-XT : Gene barcode (same as ZUMIs < 2.6.0).
+XT : Gene barcode (same as zUMIs < 2.6.0).
 UB : UMI (same as zUMIs).
 EL : Locations of read ends (strand dependent).
 NC : Conflict in the reconstruction, the number of conflicting bases.
