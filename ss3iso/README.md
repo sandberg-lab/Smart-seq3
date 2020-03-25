@@ -55,9 +55,6 @@ Options:
 -Q, --Quantification: run isoform reconstruction and quantification
 ```
 
-## Output
-
-
 ## Changelog
 
 ## Getting help
