@@ -183,6 +183,7 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
     master_read['gene'] = gene
     master_read['umi'] = umi
     q.put((True, convert_to_sam(master_read)))
+    del master_read
     return True
 
 
@@ -237,7 +238,7 @@ def assemble_reads(bamfile,gene_to_stitch, cell_set):
              stitch_reads(mol, None, info[0], info[1], info[2])
         else:
             q.put((False, '{} does not have all reads within the annotated gene'.format(node)))
-
+    del readtrie
     return gene_of_interest
 
 
