@@ -1,6 +1,6 @@
 # Welcome to ss3iso 
 
-<img src="https://github.com/PingChen-Angela/SS3_isoform/blob/master/img/isoform_reconstruction.png" alt="UMI reads" width="600"/>
+<img src="https://github.com/sandberg-lab/Smart-seq3/blob/master/ss3iso/isoform_reconstruction.png" alt="UMI reads" width="600"/>
 
 ss3iso is a Python pipeline developed for isoform reconstruction of UMI-linking fragments from Smart-seq3. For detailed information, please read our paper [Single-cell RNA counting at allele- and isoform-resolution using Smart-seq3](https://www.biorxiv.org/content/10.1101/817924v1).
 
