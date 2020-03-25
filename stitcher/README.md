@@ -55,12 +55,12 @@ BC : Cell barcode (same as zUMIs).
 XT : Gene barcode (same as ZUMIs < 2.6.0).
 UB : UMI (same as zUMIs).
 EL : Locations of read ends (strand dependent).
-NC : If there is a conflict in the reconstruction, the number of conflicting intervals.
-IL : If there is a conflict in the reconstruction, the intervals where there is a conflict.
+NC : Conflict in the reconstruction, the number of conflicting bases.
+IL : Conflict in the reconstruction, the intervals where there is a conflict. Written as start1,end1,start2,end2,...
 ```
 
 ## Example 
 
 ```
-python3 stitcher.py --i smartseq3_file.bam --o smartseq3_molecules.sam --g Mus_musculus.GRCm38.91.chr.clean.gtf --t 10 --contig chr1 --cells cells.txt
+python3 stitcher.py --i smartseq3_file.bam --o smartseq3_molecules.sam --counts zUMIs_output/expression/Smartseq3.dgecounts.rds --g Mus_musculus.GRCm38.91.chr.clean.gtf --t 10 --contig chr1 --cells cells.txt
 ```
