@@ -77,19 +77,6 @@ def get_skipped_tuples(cigtuples, ref_positions):
             skipped_locs.append((ref_positions[l-1]+1, ref_positions[l]-1))
     return skipped_locs
 
-def get_del_tuples(ref_skip_union):
-    prev_interval = None
-    del_intervals = []
-    for x in ref_skip_union:
-        if prev_interval is not None:
-            if prev_interval[1] + 1 == x[0]:
-                prev_interval = x
-                continue
-            else:
-                del_intervals.append((prev_interval[1]+1, x[0]-1))
-        prev_interval = x
-    return del_intervals
-
 def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
     master_read = {}
     seq_df = None
