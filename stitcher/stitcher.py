@@ -95,7 +95,7 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
     seq_df = None
     qual_df = None
     nreads = len(read_d)
-    reverse_read1 = [0]*nreads
+    reverse_read1 = [0]*np.int_(nreads/2)
     read_ends = [0]*nreads
     read_starts = [0]*nreads
     exonic_list = [0]*nreads
