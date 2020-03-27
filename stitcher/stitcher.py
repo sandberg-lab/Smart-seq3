@@ -82,7 +82,7 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
     seq_df = None
     qual_df = None
     nreads = len(read_d)
-    reverse_read1 = [0]*np.int_(nreads/2)
+    reverse_read1 = []
     read_ends = [0]*nreads
     read_starts = [0]*nreads
     exonic_list = [0]*nreads
@@ -114,7 +114,7 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
 
         if mol_dict is None:
             if read.is_read1:
-                reverse_read1[i] = read.is_reverse
+                reverse_read1.append(read.is_reverse)
             else:
                 read_starts[i] = read.reference_start
                 read_ends[i] = read.reference_end
