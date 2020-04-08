@@ -372,44 +372,39 @@ def construct_stitched_molecules(infile, outfile,gtffile,counts, cells, contig, 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Stitch together molecules from reads sharing the same UMI')
-    parser.add_argument('--i',metavar='input', type=str, nargs=1, help='Input .bam file')
-    parser.add_argument('--o', metavar='output', type=str, nargs=1, help='Output .sam file')
-    parser.add_argument('--g', metavar='gtf', type=str, nargs = 1, help='gtf file with gene information')
-    parser.add_argument('--counts', metavar='counts', type=str, nargs = 1, help='zUMIs .rds file with read counts')
-    parser.add_argument('--t', metavar='threads', type=int, nargs=1, default=[1], help='Number of threads')
-    parser.add_argument('--cells', default=None, metavar='cells', type=str, nargs=1, help='List of cell barcodes to stitch molecules')
-    parser.add_argument('--contig', default=None, metavar='contig', type=str, nargs=1, help='Restrict stitching to contig')
+    parser.add_argument('-i','--input',metavar='input', type=str, help='Input .bam file')
+    parser.add_argument('-o','--output', metavar='output', type=str, help='Output .sam file')
+    parser.add_argument('-g','--gtf', metavar='gtf', type=str, help='gtf file with gene information')
+    parser.add_argument('--counts', metavar='counts', type=str, help='zUMIs .rds file with read counts')
+    parser.add_argument('-t', '--threads', metavar='threads', type=int, default=1, help='Number of threads')
+    parser.add_argument('--cells', default=None, metavar='cells', type=str, help='List of cell barcodes to stitch molecules')
+    parser.add_argument('--contig', default=None, metavar='contig', type=str, help='Restrict stitching to contig')
     parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + __version__)
     args = parser.parse_args()
-    if args.i is None:
+    infile = args.input
+    if infile is None:
         raise Exception('No input file provided.')
-    infile = args.i[0]
-    if args.o is None:
+    outfile = args.output
+    if outfile is None:
         raise Exception('No output file provided.')
-    outfile = args.o[0]
-    if args.g is None:
+    gtffile = args.gtf  
+    if gtffile is None:
         raise Exception('No gtf file provided.')
-    gtffile = args.g[0]
-    if args.counts is None:
-        counts = args.counts
-    else:
-        counts = args.counts[0]
-    threads = int(args.t[0])
-    if args.cells is None:
-        cells = args.cells
-    else:
-        cells = args.cells[0]
-    if args.contig is None:
-        contig = args.contig
-    else:
-        contig = args.contig[0]
+    counts = args.counts
+    threads = int(args.threads)
+    cells = args.cells
+    contig = args.contig
+  
     q = JoinableQueue()
     p = Process(target=create_write_function(filename=outfile, bamfile=infile, version=__version__), args=(q,))
     p.start()
+    
     print('Stitching reads for {}'.format(infile))
+    
     start = time.time()
     construct_stitched_molecules(infile, outfile, gtffile,counts, cells, contig, threads, __version__)
     q.put((None,None))
     p.join()
     end = time.time()
+    
     print('Finished writing stitched molecules from {} to {}, took {}'.format(infile, outfile, get_time_formatted(end-start)))
