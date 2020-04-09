@@ -18,8 +18,6 @@ nuc_dict = {'A':0, 'T':1, 'C':2, 'G':3, 'N': 4}
 np.seterr(divide='ignore')
 
 import rpy2.robjects as robjects
-from rpy2.robjects import pandas2ri
-pandas2ri.activate()
 from rpy2.robjects.packages import STAP
 
 def make_ll_array(e):
