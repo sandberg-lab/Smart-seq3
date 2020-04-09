@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # V 1.0
 # anton jm larsson anton.larsson@ki.se
 import argparse
