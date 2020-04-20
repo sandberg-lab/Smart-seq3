@@ -327,7 +327,7 @@ def create_write_function(filename, bamfile, version):
 def extract(d, keys):
     return dict((k, d[k]) for k in keys if k in d)
 
-def construct_stitched_molecules(infile, outfile,gtffile,counts, cells, contig, threads, version):
+def construct_stitched_molecules(infile, outfile,gtffile,counts, cells, contig, threads, q, version):
 
 
     if cells is not None:
@@ -368,7 +368,7 @@ def construct_stitched_molecules(infile, outfile,gtffile,counts, cells, contig, 
         
         gene_df = gene_df.join(total_counts).fillna(0).sort_values('total_counts', ascending=False)
         
-    params = Parallel(n_jobs=threads, verbose = 3, backend='multiprocessing')(delayed(assemble_reads)(infile, gene, cell_set) for g,gene in gene_df.iterrows())
+    params = Parallel(n_jobs=threads, verbose = 3, backend='loky')(delayed(assemble_reads)(infile, gene, cell_set,q) for g,gene in gene_df.iterrows())
 
 
     return None
