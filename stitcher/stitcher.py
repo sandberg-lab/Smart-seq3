@@ -106,7 +106,7 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
                     del seq[loc]
                     del p_x[loc]
         except IndexError:
-            q.put((False, read.query_name))
+            return (False, read.query_name + '\n')
             continue
         ref_positions = read.get_reference_positions()
         skipped_intervals = get_skipped_tuples(cigtuples, ref_positions)
@@ -168,12 +168,10 @@ def stitch_reads(read_d, mol_dict=None, cell = None, gene = None, umi = None):
     master_read['cell'] = cell
     master_read['gene'] = gene
     master_read['umi'] = umi
-    q.put((True, convert_to_sam(master_read)))
-    del master_read
-    return True
+    return (True, convert_to_sam(master_read))
 
 
-def assemble_reads(bamfile,gene_to_stitch, cell_set):
+def assemble_reads(bamfile,gene_to_stitch, cell_set, q):
     readtrie = pygtrie.StringTrie()
     bam = pysam.AlignmentFile(bamfile, 'rb')
     gene_of_interest = gene_to_stitch['gene_id']
@@ -217,14 +215,17 @@ def assemble_reads(bamfile,gene_to_stitch, cell_set):
                 readtrie[node].append(read)
             else:
                 readtrie[node] = [read]
+    mol_list = []
+    mol_append = mol_list.append
     for node, mol in readtrie.iteritems():
         info = node.split('/')
         read_names = [r.query_name for r in mol]
         if 2*len(set(read_names)) == len(mol):
-             stitch_reads(mol, None, info[0], info[1], info[2])
+            mol_append(stitch_reads(mol, None, info[0], info[1], info[2]))
         else:
-            q.put((False, '{} does not have all reads within the annotated gene'.format(node)))
+            mol_append((False, '{} does not have all reads within the annotated gene\n'.format(node)))
     del readtrie
+    q.put(True, mol_list)
     return gene_of_interest
 
 
@@ -260,6 +261,7 @@ def make_POS_and_CIGAR(stitched_m):
             l.append(n_bases)
         del tuple_dict[c[0]][0]
     return POS, CIGAR, conflict, nreads_conflict, interval_list
+
 def convert_to_sam(stitched_m):
     sam_dict = {}
     POS, CIGAR, conflict, nreads_conflict, interval_list = make_POS_and_CIGAR(stitched_m)
@@ -307,12 +309,14 @@ def create_write_function(filename, bamfile, version):
                 samfile.write('@SQ\tSN:{}\tLN:{}\n'.format(SQ['SN'],SQ['LN']))
             samfile.write('@PG\tID:stitcher\tVN:{}\n'.format(version))
             while True:
-                good, mol = q.get()
-                if mol is None: break
+                good, mol_list = q.get()
+                if good is None: break
                 if good:
-                    samfile.write(mol)
-                else:
-                    error_file.write(mol + '\n')
+                    for success, mol in mol_list:
+                        if success:
+                            samfile.write(mol)
+                        else:
+                            error_file.write(mol)
                 q.task_done()
             samfile.truncate()
             q.task_done()
@@ -393,15 +397,15 @@ if __name__ == '__main__':
     threads = int(args.threads)
     cells = args.cells
     contig = args.contig
-  
-    q = JoinableQueue()
+    m = Manager()
+    q = m.JoinableQueue()
     p = Process(target=create_write_function(filename=outfile, bamfile=infile, version=__version__), args=(q,))
     p.start()
     
     print('Stitching reads for {}'.format(infile))
     
     start = time.time()
-    construct_stitched_molecules(infile, outfile, gtffile,counts, cells, contig, threads, __version__)
+    construct_stitched_molecules(infile, outfile, gtffile,counts, cells, contig, threads,q, __version__)
     q.put((None,None))
     p.join()
     end = time.time()
