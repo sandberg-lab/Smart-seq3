@@ -12,7 +12,7 @@ import sys
 import time
 import os
 from joblib import delayed,Parallel
-from multiprocessing import Process, JoinableQueue
+from multiprocessing import Process, Manager
 __version__ = '1.0'
 nucleotides = ['A', 'T', 'C', 'G']
 nuc_dict = {'A':0, 'T':1, 'C':2, 'G':3, 'N': 4}
