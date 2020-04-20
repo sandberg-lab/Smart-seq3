@@ -225,7 +225,7 @@ def assemble_reads(bamfile,gene_to_stitch, cell_set, q):
         else:
             mol_append((False, '{} does not have all reads within the annotated gene\n'.format(node)))
     del readtrie
-    q.put(True, mol_list)
+    q.put((True, mol_list))
     return gene_of_interest
 
 
