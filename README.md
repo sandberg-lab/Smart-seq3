@@ -28,9 +28,9 @@ You can find an [example YAML file here](https://github.com/sandberg-lab/Smart-s
 Note that we advise caution when using STARs 2-pass mapping mode, as we have observed some spurious novel splice junctions being used that may distort molecule reconstructions.
 
 ### 2) Scripts to reconstruct RNA molecules based on the zUMIs prepared BAM files.
-Using our python script [*stitcher.py*](https://github.com/sandberg-lab/Smart-seq3/tree/master/stitcher) we in silico reconstruct RNA molecules based on the read pair alignments in the zUMIs generated BAM files. Note that for RNA reconstruction, paired-end sequencing data is required. This step results in a new BAM file where each entry is a reconstructed molecule.
+Using our python script [*stitcher.py*](https://github.com/AntonJMLarsson/stitcher.py/tree/57330b5af97a338d914b4504121a5d018eb2c3d5) we in silico reconstruct RNA molecules based on the read pair alignments in the zUMIs generated BAM files. Note that for RNA reconstruction, paired-end sequencing data is required. This step results in a new BAM file where each entry is a reconstructed molecule.
 
-https://github.com/sandberg-lab/Smart-seq3/tree/master/stitcher
+https://github.com/AntonJMLarsson/stitcher.py/tree/57330b5af97a338d914b4504121a5d018eb2c3d5
 
 ### 3) Scripts to assign reconstructed RNA molecules to allelic origins.
 We provide a stand-alone Rscript that assigns molecules to their allele of origin.
