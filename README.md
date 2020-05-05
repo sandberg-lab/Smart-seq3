@@ -1,6 +1,6 @@
 # Smart-seq3
 
-This repository contains the scripts and pipelines used to process and analyse Smart-seq3 libraries, as described in Hagemann-Jensen et al. 2020. 
+This repository contains the scripts and pipelines used to process and analyse Smart-seq3 libraries, as described in Hagemann-Jensen et al. 2020. https://doi.org/10.1038/s41587-020-0497-0
 
 We here provide the code to perform the following steps, that are expanded upon in the dedicated sub-folders.
 
