@@ -13,7 +13,7 @@ Make sure the following softwares and Python packages are installed before runni
 ```
 Python3
 tabix
-bedtools
+bedtools (v2.26.0)
 samtools
 
 optparse (python module)
