@@ -441,7 +441,10 @@ def get_comm_exon_ass(df):
     
     return df
 
-def get_isoforms(conf, indir, ref_iso):
+def get_isoforms(conf, indir, ref):
+    
+    global ref_iso
+    ref_iso = ref
     
     os.system('bedtools intersect -s -a %s/gene.gff -b %s/gene.gff -wo > %s/gene_merged.gff' %(indir, indir, indir))
     df = pd.read_table('%s/gene_merged.gff' %(indir), header=None, sep="\t", index_col=None)
