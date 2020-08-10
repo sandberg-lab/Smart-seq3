@@ -477,13 +477,13 @@ def get_isoforms(conf, indir, ref):
     infered_gene_paths = [gene_file for gene_file in infered_gene_paths if not os.path.exists(gene_file.replace('.R1','assigned_isoforms')) or os.stat(gene_file.replace('.R1','assigned_isoforms')).st_size==0]
     print('%s remaining files' %(len(infered_gene_paths)))
     
-    if not os.path.exists('%s/.tmp' %indir): os.makedirs('%s/.tmp' %indir)
+    if not os.path.exists('%s/.tmp' %outdir): os.makedirs('%s/.tmp' %outdir)
     pool = mp.Pool(processes=int(conf['expression']['nproc']))
     func = partial(isoform_inference_correction_by_ass_v2, indir, ref_iso_dict, outdir)
     pool.map(func, infered_gene_paths, chunksize=1)
     pool.close()
         
-    p = subprocess.Popen('rm -rf %s/.tmp' %(indir), shell=True)
+    p = subprocess.Popen('rm -rf %s/.tmp' %(outdir), shell=True)
     (output, err) = p.communicate()
     
     p = subprocess.Popen('rm -rf %s/.tempDir' %(indir), shell=True)
