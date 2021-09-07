@@ -42,8 +42,8 @@ def main():
     parser.add_option("-P", "--Preprocess", action="store_true", dest='preprocess',
                       help="Preprocess the input BAM for downstream analysis.")
     
-    parser.add_option("-Q", "--Quantification", action="store_true", dest='quantification',
-                      help="Run isoform reconstruction and quantification.")
+    parser.add_option("-R", "--Reconstruction", action="store_true", dest='reconstruction',
+                      help="Run isoform reconstruction.")
 
 
     (op, args) = parser.parse_args()
@@ -82,7 +82,7 @@ def main():
         os.system('samtools index %s/%s' %(preDir, re.sub(umi_file_prefix,'UBfix.coordinateSorted_unique.bam',os.path.basename(inputBAM))))
         os.system('samtools index %s/%s' %(preDir, re.sub(umi_file_prefix,'UBfix.coordinateSorted_multi.bam',os.path.basename(inputBAM))))
 
-    if op.quantification:
+    if op.reconstruction:
         
         print('Collect informative reads per gene...')
         in_bam_uniq = '%s/%s' %(os.path.join(outdir, species, experiment, "preprocess"), re.sub(umi_file_prefix,'UBfix.coordinateSorted_unique.bam',os.path.basename(inputBAM)))
@@ -101,7 +101,7 @@ def main():
         print('Build reference isoforms...')
         ref = build_reference(conf_data, out_path)
         
-        print('Start isoform reconstruction and quantification...')
+        print('Start isoform reconstruction...')
         get_isoforms(conf_data, out_path, ref)
         
 
