@@ -193,6 +193,7 @@ def _isoform_inference_of_single_molec(aligned_reads_df, ref):
     infered = _infer_isoform(exon_bool_array, ref)
     exon_bool_string = ''.join(['N' if np.isnan(bb) else str(int(bb)) for bb in exon_bool_array])
     
+    if aligned_reads_df.shape[0] == 0: return []
     out = [aligned_reads_df[16].iloc[0], aligned_reads_df[17].iloc[0], 
            n_fragment, ','.join(map(str,exon_idx_list)), ','.join(junc_list),
            read_coord_list, aligned_reads_df[13].iloc[0], ref['Total_n_exons'], infered['total_n_ref_transcripts'],
@@ -224,7 +225,7 @@ def _run_isoform(indir, outdir, ref_iso_dict, kept_cell_BCs, conf, overlaped_gen
     aligned = pd.concat([aligned_reads, bc], axis=1)
     
     results = aligned.groupby(by='BC_UB').apply(_isoform_inference_of_single_molec, ref_iso_dict[gene])
-    df = pd.DataFrame(list(results.values))
+    df = pd.DataFrame(list(results.values)).dropna()
     df.to_csv('%s/%s' %(outdir, gene), sep="\t", index=False, header=False)
     
     return
