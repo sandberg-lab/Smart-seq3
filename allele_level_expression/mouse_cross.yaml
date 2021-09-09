@@ -21,7 +21,7 @@ sequence_files:
 reference:
   STAR_index: /mnt/storage1/genomes/Mouse_CAST_Nmasked/STAR5idx_noGTF/
   GTF_file: /mnt/storage1/genomes/Mouse/Mus_musculus.GRCm38.91.chr.clean.gtf
-  additional_STAR_params: '--limitSjdbInsertNsj 2000000 --clip3pAdapterSeq CTGTCTCTTATACACATCT --quantMode TranscriptomeSAM'
+  additional_STAR_params: '--limitSjdbInsertNsj 2000000 --clip3pAdapterSeq CTGTCTCTTATACACATCT'
   additional_files:
 out_dir: /mnt/storage2/temp_workdir/zUMIs_nmask/
 num_threads: 50
