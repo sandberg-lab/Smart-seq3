@@ -297,6 +297,7 @@ def isoform_inference_correction_by_ass_v2(expr_indir, ref, outdir, gene_file):
     outdir = '%s/%s' %(outdir, chrom)
     if not os.path.exists(outdir): os.makedirs(outdir)
     
+    if os.stat(gene_file).st_size == 0: return
     initial_infered = pd.read_table(gene_file, header=None, index_col=None, sep="\t")
     initial_infered.index = initial_infered.apply(lambda x: '%s_%s' %(x[0], x[1]), axis=1)
     infered_to_correct = initial_infered.loc[initial_infered[10]>1]
