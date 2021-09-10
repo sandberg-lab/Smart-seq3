@@ -45,7 +45,7 @@ python ss3_isoform.py -i [path/to/inputBAM] -c [path/to/configuration file] -e [
 
 Options:
 ```
--i, --inputBAM: input ZUMIs BAM path. Note: Use the BAM with UB:Z barcode included. Missing values should be filtered in advance.
+-i, --inputBAM: input ZUMIs BAM path. Note: Use the BAM with UB:Z barcode included. Aligned reads with missing UB:Z barcodes should be filtered in advance.
 -c, --config: the required pipeline configuration file
 -e, --experiment: the name of the experiment/study
 -o, --outputDir: the output directory
