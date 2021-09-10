@@ -88,7 +88,7 @@ def main():
         in_bam_uniq = '%s/%s' %(os.path.join(outdir, species, experiment, "preprocess"), re.sub(umi_file_prefix,'UBfix.coordinateSorted_unique.bam',os.path.basename(inputBAM)))
         in_bam_multi = '%s/%s' %(os.path.join(outdir, species, experiment, "preprocess"), re.sub(umi_file_prefix,'UBfix.coordinateSorted_multi.bam',os.path.basename(inputBAM)))
     
-        out_path = os.path.join(outdir, species, experiment, "expression_%s" %(conf_data['annotation']['gtf_source']))
+        out_path = os.path.join(outdir, species, experiment, "isoforms_%s" %(conf_data['annotation']['gtf_source']))
         if not os.path.exists(out_path): os.makedirs(out_path)
         
         sys_tmp_dir = '%s/.tmp' %(out_path)
